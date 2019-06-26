@@ -235,6 +235,7 @@ class score(object):
         outputplot=os.path.join(self.outdir,'plots')
         if not os.path.exists(outputplot): os.makedirs(outputplot)
         plt.savefig(outputplot+'/performance.pdf')
+        plt.clf()
         #plt.show()
         # Draw the Roc curves for testing and training samples
 

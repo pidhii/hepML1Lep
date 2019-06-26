@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from preperData.splitDFs import splitDFs
 from preperData.PrepData import PrepData
 from MLClass.score import score
