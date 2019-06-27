@@ -34,18 +34,18 @@ var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt' ,'nLep', 'Lep_pt', 'Selected', 'nVe
             'nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso",
              "Lep_miniIso","iso_pt","iso_MT2", 'mGo', 'mLSP']
 class score(object):
-    def __init__(self,score,outdir,testDF,trainDF,class_weights,do_binary_first = False,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
+    def __init__(self,score,outdir,testDF,trainDF,class_weights,do_binary= False,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
         self.score               = score                  
         self.outdir              = outdir                 
         self.testDF              = testDF                 
         self.trainDF             = trainDF                
         self.class_weights       = class_weights          
-        self.do_binary_first     = do_binary_first        
+        self.do_binary           = do_binary        
         self.do_multiClass       = do_multiClass          
         self.nSignal_Cla         = nSignal_Cla            
         self.do_parametric       = do_parametric          
         self.split_Sign_training = split_Sign_training
-        self.class_names = ['TTSemiLep','TTDiLep','WJets','signal']
+        self.class_names         = ['TTSemiLep','TTDiLep','WJets','signal']
 
     # ## Define the model
     # We'll start with a dense (fully-connected) NN layer.
@@ -150,7 +150,7 @@ class score(object):
             self.dnn_score_test, self.dnn_score_train,self.history ,self.model = self.TrainDNN(self.trainDF, 
                                                     self.testDF,
                                                     var_list,
-                                                    multi=True,
+                                                    multi=self.do_multiClass,
                                                     nclass =4,
                                                     epochs=10,
                                                     batch_size=1024,
@@ -384,3 +384,50 @@ class score(object):
             fig, ax = plt.subplots(figsize=(20, 12)) 
             Hmap = seaborn.heatmap(corr_mat, square=True, ax=ax, vmin=-1., vmax=1.,annot=True)
             Hmap.figure.savefig(outputplot+'/Class_'+str(self.class_names[multitarget])+'_hmx.pdf', transparent=True, bbox_inches='tight')
+    
+#    def compareTrainTest(self,clf, X_train, y_train, X_test, y_test, bins=30,append=''):
+#        '''Compares the decision function for the train and test BDT'''
+#        decisions = []
+#        if self.do_multiClass : 
+#            for i in range(0,len(self.class_names)) :
+#                decisions += clf[i]
+#        elif self.do_binary_first : 
+#            decisions += [clf[0],clf[1]]
+#
+#        low = min(np.min(d) for d in decisions)
+#        high = max(np.max(d) for d in decisions)
+#        low_high = (low,high)
+#        
+#        for i, d in decisions : 
+#            plt.hist(d, color='r', alpha=0.5, range=low_high, bins=bins,
+#                histtype='stepfilled', normed=True,
+#                label='S (train)')
+#        plt.hist(decisions[1],
+#                color='b', alpha=0.5, range=low_high, bins=bins,
+#                histtype='stepfilled', normed=True,
+#                label='B (train)')
+#
+#        hist, bins = np.histogram(decisions[2],
+#                                bins=bins, range=low_high, normed=True)
+#        scale = len(decisions[2]) / sum(hist)
+#        err = np.sqrt(hist * scale) / scale
+#        
+#        width = (bins[1] - bins[0])
+#        center = (bins[:-1] + bins[1:]) / 2
+#        plt.errorbar(center, hist, yerr=err, fmt='o', c='r', label='S (test)')
+#        
+#        hist, bins = np.histogram(decisions[3],
+#                                bins=bins, range=low_high, normed=True)
+#        scale = len(decisions[3]) / sum(hist)
+#        err = np.sqrt(hist * scale) / scale
+#
+#        plt.errorbar(center, hist, yerr=err, fmt='o', c='b', label='B (test)')
+#
+#        plt.xlabel("Classifier output")
+#        plt.ylabel("Arbitrary units")
+#        plt.yscale('log')
+#        plt.legend(loc='best')
+#        outputplot=os.path.join(self.outdir,'plots')
+#        if not os.path.exists(outputplot): os.makedirs(outputplot)
+#        plt.savefig(os.path.join(outputplot, 'compareTrainTest'+append+'.pdf'))
+#        plt.clf()

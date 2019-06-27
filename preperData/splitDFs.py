@@ -76,7 +76,7 @@ class splitDFs(object):
         self.df_all = {}
         self.df_all['all_sig'] = pd.DataFrame()
 
-        if self.nSignal_Cla > 1 : 
+        if self.nSignal_Cla > 1 and self.do_multiClass: 
             self.bkgDF.loc[self.SemiLep_TT_index,'isSignal'] = 0 #pd.Series(np.zeros(self.bkgDF.shape[0]), index=self.bkgDF.index)
             self.bkgDF.loc[self.DiLep_TT_index,'isSignal'] = 1
             self.bkgDF.loc[self.WJets_others_index,'isSignal'] = 2
@@ -137,7 +137,7 @@ class splitDFs(object):
             del bkgdf
             del sigdf
     
-        elif self.split_Sign_training : 
+        elif self.split_Sign_training and self.do_multiClass: 
             self.bkgDF.loc[self.SemiLep_TT_index,'isSignal'] = 0 #pd.Series(np.zeros(self.bkgDF.shape[0]), index=self.bkgDF.index)
             self.bkgDF.loc[self.DiLep_TT_index,'isSignal'] = 1
             self.bkgDF.loc[self.WJets_others_index,'isSignal'] = 2
@@ -174,6 +174,35 @@ class splitDFs(object):
                 self.df_all['all_bkg_1'] = self._overbalance_bkg(signal_list_dfs_1,self.bkgDF)
                 self.df_all['all_bkg_2'] = self._overbalance_bkg(signal_list_dfs_2,self.bkgDF)
             else : self.df_all['all_bkg'] = self.bkgDF.copy()
+
+        elif not self.do_multiClass : 
+            for num ,idxs in enumerate(self.list_of_mass_idxs) : 
+                self.df_all[self.signal_list_names[num]] = self.signalDF.loc[idxs ,:]
+                self.df_all[self.signal_list_names[num]].loc[:,'isSignal'] = 1
+                ## for the last training over all the samples (the multiClass trainig)
+                self.df_all['all_sig'] = pd.concat([self.df_all['all_sig'],self.df_all[self.signal_list_names[num]]])
+                #del self.df_all[self.signal_list_names[num]]
+
+            self.df_all['all_sig'] = self.df_all['all_sig'].reset_index()    
+            self.df_all['all_bkg'].loc[self.SemiLep_TT_index,'isSignal'] = 0
+            self.df_all['all_bkg'].loc[self.DiLep_TT_index,'isSignal'] = 0
+            self.df_all['all_bkg'].loc[self.WJets_others_index,'isSignal'] = 0
+            if self.do_parametric : 
+                signal_list_dfs = [] 
+                for name in  self.signal_list_names : 
+                    signal_list_dfs.append(self.df_all[name])
+                #print signal_list_dfs
+                self.df_all['all_bkg'] = self._overbalance_bkg(signal_list_dfs,self.bkgDF)
+            else : self.df_all['all_bkg'] = self.bkgDF.copy()
+            ## free up the memeory from all other dfs 
+            bkgdf =  self.df_all['all_bkg'].copy()
+            sigdf =  self.df_all['all_sig'].copy()
+            del self.df_all
+            self.df_all = {}
+            self.df_all['all_bkg'] = bkgdf.copy()
+            self.df_all['all_sig'] = sigdf.copy()
+            del bkgdf
+            del sigdf
 
     def split(self,sigdfnew,bkgdfnew,train_size=0.6, test_size=0.4, shuffle=True, random_state=0) :
         print ('now splitting the samples with the options : ','train_size = ', train_size, 'test_size = ',test_size, 'shuffle = ',shuffle, 'random_state = ',random_state)
