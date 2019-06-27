@@ -18,13 +18,15 @@ import numpy as np
 var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt', 'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL','nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso","Lep_miniIso","iso_pt","iso_MT2","mGo", "mLSP"]
 categoriesMultitarget = ['TTSemiLep','TTDiLep','WJets','Signal']
 class eval(object):
-    def __init__(self,infile,outdir,pathToModel,doBinary=False,do_multiClass = True,ClassList=None):
+    def __init__(self,infile,outdir,pathToModel,doBinary=False,do_multiClass = True,ClassList=None,mGo = 0 , mLSP = 0):
         self.infile        =  infile        
         self.outdir        =  outdir       
         self.pathToModel   =  pathToModel         
         self.doBinary      =  doBinary      
         self.do_multiClass =  do_multiClass 
         self.ClassList = ['TTSemiLep','TTDiLep','WJets','signal']
+        self.mGo = mGo 
+        self.mLSP = mLSP
         if not os.path.exists(self.outdir):
             os.makedirs(str(self.outdir))
             
@@ -43,10 +45,11 @@ class eval(object):
         var_file = open("1L_varList.txt",'r')
         L_varList = []
         for var in var_file :
+            if var.startswith('#') : continue
             var = var.strip()
             L_varList.append(var)
         return L_varList
-
+     
     def ev_score_toROOT(self):
         '''evaluate the score for the loaded modle'''
         L_varList = self.varlist()
@@ -54,7 +57,13 @@ class eval(object):
         self.load_model()
         print (" going to evalute the score from ",self.pathToModel)
         df = read_root(self.infile ,'sf/t',columns=L_varList,flatten=['DLMS_ST','DLMS_HT','DLMS_dPhiLepW','DLMS_nJets30Clean'])
-        #print (df['mGo'])
+        if not '_SMS_' in self.infile:
+            df.loc[:,'mGo'] = float(self.mGo)
+            df.loc[:,'mLSP'] = float(self.mLSP)
+        print ('prediction will be made to mGo = ',self.mGo,' and mLSP =  ', self.mLSP )
+
+        #print (df['mGo'].dtype)
+
         if self.do_multiClass : 
             self.model.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'],optimizer='adam')
             prediction = self.model.predict_proba(df[var_list].values)
@@ -64,7 +73,8 @@ class eval(object):
         elif self.doBinary:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
             df.loc[:,'DNN'] = self.model.predict(df[var_list])
-        df.to_root(self.outdir+'/'+self.infile.split("/")[-1], key='sf/t')
+
+        df.to_root(self.outdir+'/'+self.infile.split("/")[-1].replace('.root','_'+self.mGo+'_'+self.mLSP+'.root') ,key='sf/t')
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])
 
     def ev_score_toDF(self):
@@ -74,7 +84,11 @@ class eval(object):
         self.load_model()
         print (" going to evalute the score from ",self.pathToModel)
         df = pd.read_csv(self.infile ,index_col=None)
-        
+        if not '_SMS_' in self.infile:
+            df.loc[:,'mGo'] = self.mGo
+            df.loc[:,'mLSP'] = self.mLSP
+        print('prediction will be made to mGo = ',self.mGo,' and mLSP =  ', self.mLSP )
+
         if self.do_multiClass : 
             self.model.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'],optimizer='adam')
             prediction = self.model.predict_proba(df[var_list].values)
@@ -84,5 +98,5 @@ class eval(object):
         elif self.doBinary:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
             df.loc[:,'DNN'] = self.model.predict(df[var_list])
-        df.to_csv(self.outdir+'/'+self.infile.split("/")[-1],index=None)
+        df.to_csv(self.outdir+'/'+self.infile.split("/")[-1].replace('.csv','_'+self.mGo+'_'+self.mLSP+'.csv'),index=None)
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])
