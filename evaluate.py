@@ -24,7 +24,7 @@ if __name__ == '__main__':
     ev = eval(filename,outdir,model,mGo = mGo , mLSP = mLSP)
 
     if '.root' in filename : 
-        ev.ev_score_toROOT()
+        ev.ev_score_toROOT(savepredicOnly=True)
     elif '.csv' in filename : 
         ev.ev_score_toDF()
     

@@ -50,40 +50,49 @@ class eval(object):
             L_varList.append(var)
         return L_varList
      
-    def ev_score_toROOT(self):
+    def ev_score_toROOT(self,savepredicOnly=False):
         '''evaluate the score for the loaded modle'''
         L_varList = self.varlist()
         #get the model 
         self.load_model()
-        print (" going to evalute the score from ",self.pathToModel)
+       
         df = read_root(self.infile ,'sf/t',columns=L_varList,flatten=['DLMS_ST','DLMS_HT','DLMS_dPhiLepW','DLMS_nJets30Clean'])
+        print ('df loaded')
+        print (" going to evalute the score from ",self.pathToModel)
         if not '_SMS_' in self.infile:
             df.loc[:,'mGo'] = float(self.mGo)
             df.loc[:,'mLSP'] = float(self.mLSP)
         print ('prediction will be made to mGo = ',self.mGo,' and mLSP =  ', self.mLSP )
 
         #print (df['mGo'].dtype)
+        
 
         if self.do_multiClass : 
             self.model.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'],optimizer='adam')
             prediction = self.model.predict_proba(df[var_list].values)
-            for mm, mult in enumerate(categoriesMultitarget) : 
-                df.loc[:,mult] = prediction[:,mm]
-
+            if not savepredicOnly : 
+                for mm, mult in enumerate(categoriesMultitarget) : 
+                    df.loc[:,mult] = prediction[:,mm]
+            else : 
+                df = pd.DataFrame(prediction,columns=categoriesMultitarget)
         elif self.doBinary:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-            df.loc[:,'DNN'] = self.model.predict(df[var_list])
-
-        df.to_root(self.outdir+'/'+self.infile.split("/")[-1].replace('.root','_'+self.mGo+'_'+self.mLSP+'.root') ,key='sf/t')
+            if not savepredicOnly : 
+                df.loc[:,'DNN'] = self.model.predict(df[var_list])
+            else :
+                df = pd.DataFrame(self.model.predict(df[var_list]),columns=["DNN"])
+        df.to_root(self.outdir+'/'+self.infile.split("/")[-1].replace('.root','_'+str(self.mGo)+'_'+str(self.mLSP)+'.root') ,key='sf/t')
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])
 
-    def ev_score_toDF(self):
+    def ev_score_toDF(self,savepredicOnly=False):
         '''evaluate the score for the loaded modle'''
         L_varList = self.varlist()
         #get the model 
         self.load_model()
-        print (" going to evalute the score from ",self.pathToModel)
+        
         df = pd.read_csv(self.infile ,index_col=None)
+        print ('df loaded')
+        print (" going to evalute the score from ",self.pathToModel)
         if not '_SMS_' in self.infile:
             df.loc[:,'mGo'] = self.mGo
             df.loc[:,'mLSP'] = self.mLSP
@@ -92,11 +101,16 @@ class eval(object):
         if self.do_multiClass : 
             self.model.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'],optimizer='adam')
             prediction = self.model.predict_proba(df[var_list].values)
-            for mm, mult in enumerate(categoriesMultitarget) : 
-                df.loc[:,mult] = prediction[:,mm]
-
+            if not savepredicOnly : 
+                for mm, mult in enumerate(categoriesMultitarget) : 
+                    df.loc[:,mult] = prediction[:,mm]
+            else : 
+                df = pd.DataFrame(prediction,columns=categoriesMultitarget)
         elif self.doBinary:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-            df.loc[:,'DNN'] = self.model.predict(df[var_list])
-        df.to_csv(self.outdir+'/'+self.infile.split("/")[-1].replace('.csv','_'+self.mGo+'_'+self.mLSP+'.csv'),index=None)
+            if not savepredicOnly : 
+                df.loc[:,'DNN'] = self.model.predict(df[var_list])
+            else : df = pd.DataFrame(self.model.predict(df[var_list]),columns=["DNN"])
+            
+        df.to_csv(self.outdir+'/'+self.infile.split("/")[-1].replace('.csv','_'+str(self.mGo)+'_'+str(self.mLSP)+'.csv'),index=None)
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])

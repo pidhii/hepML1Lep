@@ -69,7 +69,7 @@ if __name__ == '__main__':
             ##Condor configuration
             submit_parameters = { 
                 "executable"                : execu,
-                "arguments"                 : " ".join([fc, outdir,model,wdir,0,0]),
+                "arguments"                 : " ".join([fc, outdir,wdir]),
                 "universe"                  : "vanilla",
                 "should_transfer_files"     : "YES",
                 "log"                       : "{}/job_$(Cluster)_$(Process).log".format(logdir),

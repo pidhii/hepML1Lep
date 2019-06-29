@@ -29,4 +29,4 @@ scoreing.plot_confusion_matrix(train_cm, classes=class_names, normalize=True,
                       title='Normalized confusion matrix',append="train")
 scoreing.heatMap(splitted.test_DF)
 
-#scoreing.compareTrainTest(clf, X_train, y_train, X_test, y_test, output, bins=30,append='')
+scoreing.compareTrainTest(clf, X_train, y_train, X_test, y_test, output, bins=30,append='')
