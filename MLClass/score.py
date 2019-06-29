@@ -91,7 +91,7 @@ class score(object):
         return Xg_score_train, Xg_score_test
 
 
-    def TrainDNN(self,train_DF,test_DF,var_list,multi=False,nclass = 4,epochs=200,batch_size=1024,useDropOut = False,class_weights=None):
+    def TrainDNN(self,train_DF,test_DF,var_list,multi=False,nclass = 4,epochs=200,batch_size=1024,useDropOut = False,class_weights=None,loss=None):
         """ With training and testing DataFrame, and a list of variables with which to train and evaluate, produce the 
             score series for both the training and testing sets
         """
@@ -109,7 +109,11 @@ class score(object):
             if useDropOut : 
                 DNN.add(Dropout(0.01))
             DNN.add(Dense(1, kernel_initializer='uniform', activation='sigmoid'))
-            DNN.compile(loss='binary_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.0001))
+            # if you want to change the loss function in the first stage
+            if loss is not None : 
+                DNN.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=0.0001))
+            else : 
+                DNN.compile(loss='binary_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.0001))
         elif multi == True :
             if useDropOut : 
                 DNN.add(Dropout(0.01))
@@ -141,8 +145,8 @@ class score(object):
         ## better also to return the model it self 
         return dnn_score_test, dnn_score_train, history , DNN
     
-    def do_train(self):
-        "do the actual training"
+    def do_train(self,pretrained = False):
+        "do the actual training , for fresh training"
         if self.score == 'DNN' : 
             print('let\'s do DNN training')
             ## Run the method we have just defined
@@ -154,7 +158,8 @@ class score(object):
                                                     nclass =4,
                                                     epochs=10,
                                                     batch_size=1024,
-                                                    useDropOut = True)
+                                                    useDropOut = True,
+                                                    class_weights = self.class_weights)
         elif self.score == 'XGB' : 
             #Run XGB
             print('let\'s do XGBoost training')
@@ -166,22 +171,21 @@ class score(object):
                                               min_child_weight=1,
                                               seed=0,
                                               cla = 'xgb')
-            #PlotROCTemplate(test_DF, train_DF, Xg_score_test, Xg_score_train)
         
-    def save_model(self,model_toSave):
+    def save_model(self,model_toSave,append=''):
         '''Save the model'''
         output=os.path.join(self.outdir,'model')
         if not os.path.exists(output): os.makedirs(output)
         # serialize model to JSON
         model_json = model_toSave.to_json()
-        with open(output+"/1Lep_DNN_Multiclass.json", "w") as json_file:
+        with open(output+"/1Lep_DNN_Multiclass"+append+".json", "w") as json_file:
             json_file.write(model_json)
         # serialize weights to HDF5
-        model_toSave.save_weights(output+"/1Lep_DNN_Multiclass.h5")
+        model_toSave.save_weights(output+"/1Lep_DNN_Multiclass"+append+".h5")
         print("Saved model to disk")
         json_file.close()
         
-    def load_model(self,pathToModel):
+    def load_model(self,pathToModel,loss=None):
         '''Load a previously saved model (in h5 format)'''
         # load json and create model
         json_file = open(pathToModel+'.json', 'r')
@@ -190,8 +194,33 @@ class score(object):
         self.model = model_from_json(loaded_model_json)
         # load weights into new model
         self.model.load_weights(pathToModel+'.h5')
+        self.model.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=0.0001))
 
-    def performance_plot(self,history,dnn_score_test,dnn_score_train):
+        self.model.summary()
+        # Train DNN classifier
+        
+        # model checkpoint callback
+        # this saves our model architecture + parameters into dense_model.h5
+        early_stopping = EarlyStopping(monitor='val_loss', patience=10)
+        model_checkpoint = ModelCheckpoint('dense_model.h5', monitor='val_loss',
+                                           verbose=0, save_best_only=True,
+                                           save_weights_only=False, mode='auto',
+                                           period=1)
+        self.history = self.model.fit(self.trainDF[var_list].values,
+                          self.trainDF["isSignal"].values,
+                          epochs=10,
+                          batch_size=1024,
+                          # train_DF["Finalweight"].values,#*train_DF["training_weight"],
+                                      class_weight=self.class_weights,
+                          verbose=1,  # switch to 1 for more verbosity
+                          callbacks=[early_stopping, model_checkpoint],
+                          validation_split=0.25)
+
+        self.dnn_score_test = self.model.predict(self.testDF[var_list])
+        self.dnn_score_train = self.model.predict(self.trainDF[var_list])
+        ## better also to return the model it self
+        self.save_model(self.model,append='_2nd')
+    def performance_plot(self,history,dnn_score_test,dnn_score_train,append=''):
         # Make an example plot with two subplots...
         """
         overtraining test
@@ -234,7 +263,7 @@ class score(object):
         plt.subplots_adjust(bottom=0.15, wspace=0.30)
         outputplot=os.path.join(self.outdir,'plots')
         if not os.path.exists(outputplot): os.makedirs(outputplot)
-        plt.savefig(outputplot+'/performance.pdf')
+        plt.savefig(outputplot+'/performance'+append+'.pdf')
         plt.clf()
         #plt.show()
         # Draw the Roc curves for testing and training samples
@@ -373,7 +402,7 @@ class score(object):
         plt.clf()
         #plt.show()
 
-    def heatMap(self,DFrame,var_list=var_list):
+    def heatMap(self,DFrame,var_list=var_list,append=''):
         import seaborn
         outputplot=os.path.join(self.outdir,'plots')
         if not os.path.exists(outputplot): os.makedirs(outputplot)
@@ -383,51 +412,4 @@ class score(object):
             corr_mat = DFrame.loc[(DFrame["isSignal"]==multitarget), var_list].astype(float).corr() #
             fig, ax = plt.subplots(figsize=(20, 12)) 
             Hmap = seaborn.heatmap(corr_mat, square=True, ax=ax, vmin=-1., vmax=1.,annot=True)
-            Hmap.figure.savefig(outputplot+'/Class_'+str(self.class_names[multitarget])+'_hmx.pdf', transparent=True, bbox_inches='tight')
-    
-#    def compareTrainTest(self,clf, X_train, y_train, X_test, y_test, bins=30,append=''):
-#        '''Compares the decision function for the train and test BDT'''
-#        decisions = []
-#        if self.do_multiClass : 
-#            for i in range(0,len(self.class_names)) :
-#                decisions += clf[i]
-#        elif self.do_binary_first : 
-#            decisions += [clf[0],clf[1]]
-#
-#        low = min(np.min(d) for d in decisions)
-#        high = max(np.max(d) for d in decisions)
-#        low_high = (low,high)
-#        
-#        for i, d in decisions : 
-#            plt.hist(d, color='r', alpha=0.5, range=low_high, bins=bins,
-#                histtype='stepfilled', normed=True,
-#                label='S (train)')
-#        plt.hist(decisions[1],
-#                color='b', alpha=0.5, range=low_high, bins=bins,
-#                histtype='stepfilled', normed=True,
-#                label='B (train)')
-#
-#        hist, bins = np.histogram(decisions[2],
-#                                bins=bins, range=low_high, normed=True)
-#        scale = len(decisions[2]) / sum(hist)
-#        err = np.sqrt(hist * scale) / scale
-#        
-#        width = (bins[1] - bins[0])
-#        center = (bins[:-1] + bins[1:]) / 2
-#        plt.errorbar(center, hist, yerr=err, fmt='o', c='r', label='S (test)')
-#        
-#        hist, bins = np.histogram(decisions[3],
-#                                bins=bins, range=low_high, normed=True)
-#        scale = len(decisions[3]) / sum(hist)
-#        err = np.sqrt(hist * scale) / scale
-#
-#        plt.errorbar(center, hist, yerr=err, fmt='o', c='b', label='B (test)')
-#
-#        plt.xlabel("Classifier output")
-#        plt.ylabel("Arbitrary units")
-#        plt.yscale('log')
-#        plt.legend(loc='best')
-#        outputplot=os.path.join(self.outdir,'plots')
-#        if not os.path.exists(outputplot): os.makedirs(outputplot)
-#        plt.savefig(os.path.join(outputplot, 'compareTrainTest'+append+'.pdf'))
-#        plt.clf()
+            Hmap.figure.savefig(outputplot+'/Class_'+str(self.class_names[multitarget])+append+'_hmx.pdf', transparent=True, bbox_inches='tight')
