@@ -26,5 +26,5 @@ if __name__ == '__main__':
     if '.root' in filename : 
         ev.ev_score_toROOT(savepredicOnly=True)
     elif '.csv' in filename : 
-        ev.ev_score_toDF()
+        ev.ev_score_toDF(savepredicOnly=True)
     

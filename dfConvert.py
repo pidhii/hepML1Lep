@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 #Convert a signal and background root tree to a dataframe
+''' based on the script here https://github.com/aelwood/hepML/blob/master/dfConvert.py'''
 import os
 import ROOT as r
 from array import array
