@@ -21,7 +21,7 @@ on DESY NAF El7 WGS one can install it by using
      - ```ln -s  path/to/anaconda3/envs/hepML/lib/libstdc++.so.6.0.26 path/to/anaconda3/envs/hepML/lib/libstdc++.so.6```
      - same for 'libcrypto'
  - if you have GPU and you want to use, you need to install tensorflow, tensorflow-gpu and keras but from `pip` as conda tensorflow is not doing the correct setup for `GPU`
- - ```pip install tensorflow tensorflow-gpu keras```
+ - ```pip install tensorflow tensorflow-gpu keras parameter-sherpa```
 
 test the env by opening `python` and check if the python version is `3.6.8` and you can do : 
  - ```import ROOT```
@@ -34,3 +34,4 @@ or you can use mine env by doing `export PATH="/nfs/dust/cms/user/amohamed/anaco
 - an example to run the training and testing is `run.py` to prepare the dataframes, do training and testing, performance plots and save the model
 - `evaluate.py` is prepared to evaluate the model on any of the independent samples we use for farther analysis
 - `evaluate_onbatch.py` will wrap `evaluate.py` to run an independent batch system job for each sample, it will produce either `.root` or `.csv` based on the input file extension and it can also save the score only or save the entire sample based on what you need. Finally, it can run with parametric evaluation i.e. evaluate an indepenedet score for each signal hypothis  
+- `testhyperOpt.py` is also prepared to do hyper parameter optimizations taken mainly from `https://machinelearningmastery.com/grid-search-hyperparameters-deep-learning-models-python-keras/`

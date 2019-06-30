@@ -5,7 +5,7 @@ from MLClass.score import score
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import confusion_matrix
 
-loadmodel = True 
+loadmodel = False
 pathToModel = './testing/model/1Lep_DNN_Multiclass'
 append=''
 
