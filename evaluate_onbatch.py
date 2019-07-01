@@ -41,9 +41,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Runs a NAF batch system for nanoAOD', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--indir', help='List of datasets to process', metavar='indir')
     parser.add_argument('--outdir', help='output directory',default=None, metavar='outdir')
-    parser.add_argument('--exec', help="wight directory", metavar='exec')
+    parser.add_argument('--exec', help="wight directory",default='./batch/excutable.sh' ,metavar='exec')
     parser.add_argument('--model', help='name of the model with out extensions',default=None, metavar='model')
     parser.add_argument('--mult', help=' set it to true if you want to evaluate paramtric training for each mass point',default=False, action='store_true')
+    parser.add_argument('--pattern', '-p',help='extensions of the inputfiles, can be .root or .csv',default='.root', metavar='pattern')
 
     
     args = parser.parse_args()
@@ -53,6 +54,7 @@ if __name__ == '__main__':
     logdir = outdir+'/Logs' 
     model = args.model
     mult = args.mult
+    pat = args.pattern
 
     wdir = os.getcwd()
     if not os.path.exists(outdir):
@@ -62,7 +64,7 @@ if __name__ == '__main__':
     
     schedd = htcondor.Schedd()  
 
-    Filenamelist = find_all_matching(".root",dirname)
+    Filenamelist = find_all_matching(pat,dirname)
 
     if not mult : 
         for fc in Filenamelist : 
