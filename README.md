@@ -15,7 +15,7 @@ on DESY NAF El7 WGS one can install it by using
  - ```export PATH="path/to/anaconda3/bin:$PATH```
  - I keep everything as default but the installation dir i change it to a place where I have enough space
  - ```conda create -n hepML -c conda-forge root=6.16 root_numpy  pandas seaborn scikit-learn matplotlib root_pandas uproot python=3.6.8```
- - ```conda activate hepML```
+ - ```conda activate hepML``` or ```source activate hepML``` based on conda version
  - if you got any error related to "libstdc" and "libcrypto" when opening root I do : 
      - ```ln -s  path/to/anaconda3/envs/hepML/lib/libstdc++.so.6.0.26 path/to/anaconda3/envs/hepML/lib/libstdc++.so```
      - ```ln -s  path/to/anaconda3/envs/hepML/lib/libstdc++.so.6.0.26 path/to/anaconda3/envs/hepML/lib/libstdc++.so.6```
