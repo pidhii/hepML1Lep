@@ -86,7 +86,9 @@ if __name__ == '__main__':
                     job.queue(txn)
                     print ("Submit job for file {}".format(fc))
     elif mult : 
+        
         mlist = masslist('./mass_list.txt')
+        print ('you will have '+str(len(mlist)*len(Filenamelist))+' jobs will be submitted to HTC')
         for mass in mlist:
             mGo = mass[0]
             mLSP = mass[1]

@@ -14,7 +14,7 @@ on DESY NAF El7 WGS one can install it by using
  - ```bash /nfs/dust/cms/user/amohamed/Anaconda3-2019.03-Linux-x86_64.sh```
  - ```export PATH="path/to/anaconda3/bin:$PATH```
  - I keep everything as default but the installation dir i change it to a place where I have enough space
- - ```conda create -n hepML -c nlesc root=6.16 root_numpy  pandas seaborn scikit-learn matplotlib root_pandas uproot python=3.6.8```
+ - ```conda create -n hepML -c conda-forge root=6.16 root_numpy  pandas seaborn scikit-learn matplotlib root_pandas uproot python=3.6.8```
  - ```conda activate hepML```
  - if you got any error related to "libstdc" and "libcrypto" when opening root I do : 
      - ```ln -s  path/to/anaconda3/envs/hepML/lib/libstdc++.so.6.0.26 path/to/anaconda3/envs/hepML/lib/libstdc++.so```

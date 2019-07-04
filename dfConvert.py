@@ -69,8 +69,9 @@ def convertTree(tree,signal=False,passFilePath=False,tlVectors=[]):
 
 def convert1LepTree(infile,outdir,flatten=False,select="nLep >= 1 && nJets30Clean >= 1 && HT > 500 && LT > 250"):
     # choose this to load as it has a feature of applying selection while loading the file
+    branches = varlist()
     # convert the root into numpy array
-    x = root2array(infile,treename='sf/t',selection=select)
+    x = root2array(infile,treename='sf/t',selection=select,branches=branches)
     y =pd.DataFrame.from_records(x.tolist(), columns=x.dtype.names)
     # trick to flatten tree when it has mnay variables with many indeces
     if flatten :
@@ -89,6 +90,15 @@ def find_all_matching(substring, path):
             if substring in thisfile:
                 result.append(os.path.join(root, thisfile ))
     return result
+
+def varlist(infile="./1L_varList.txt"):
+    var_file = open(infile,'r')
+    L_varList = []
+    for var in var_file :
+        if var.startswith('#') : continue
+        var = var.strip()
+        L_varList.append(var)
+    return L_varList
 
 #Run on its own for testing
 if __name__ == '__main__':
