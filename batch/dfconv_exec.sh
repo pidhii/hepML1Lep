@@ -8,4 +8,4 @@ source /nfs/dust/cms/user/amohamed/anaconda3/bin/activate hepML
 
 cd $3
 
-/nfs/dust/cms/user/amohamed/anaconda3/envs/hepML/bin/python dfConvert.py --infile $1 --outdir $2 
+/nfs/dust/cms/user/amohamed/anaconda3/envs/hepML/bin/python dfConvert.py --infile $1 --outdir $2 --ana $4
