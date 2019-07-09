@@ -9,17 +9,22 @@ loadmodel = False
 pathToModel = './testing/model/1Lep_DNN_Multiclass'
 append=''
 
+
+var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt', 'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL','nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso","Lep_miniIso","iso_pt","iso_MT2","mGo", "mLSP"]
+
+
 Data = PrepData("/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_resTop/",'/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_resTop/csvs')
+
 Data.saveCSV()
 splitted = splitDFs(Data.df_all['sig'],Data.df_all['bkg'])
 splitted.prepare()
 splitted.split(splitted.df_all['all_sig'],splitted.df_all['all_bkg'])
-scoreing = score('DNN','./testing',splitted.test_DF,splitted.train_DF,splitted.class_weights)
+scoreing = score('DNN','./testing',splitted.test_DF,splitted.train_DF,splitted.class_weights,var_list=var_list)
 if loadmodel : 
     append='_2nd'
     scoreing.load_model(pathToModel, loss='sparse_categorical_crossentropy') # mode will be save automatically
 else : 
-    scoreing.do_train()
+    scoreing.do_train(nclass =4,epochs=10,batch_size=1024)
     #scoreing.load_model()
     scoreing.save_model(scoreing.model) # here we need to enforce saving it
 
@@ -38,5 +43,6 @@ scoreing.plot_confusion_matrix(test_cm, classes=class_names, normalize=True,
 scoreing.plot_confusion_matrix(train_cm, classes=class_names, normalize=True,
                                title='Normalized confusion matrix', append="train"+append)
 scoreing.heatMap(splitted.test_DF, append=append)
+
 
 #scoreing.compareTrainTest(clf, X_train, y_train, X_test, y_test, output, bins=30,append='')

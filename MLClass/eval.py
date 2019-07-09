@@ -15,13 +15,12 @@ from root_pandas import read_root,to_root
 import pandas as pd
 import numpy as np
 
-var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt', 'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL','nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso","Lep_miniIso","iso_pt","iso_MT2","mGo", "mLSP"]
-categoriesMultitarget = ['TTSemiLep','TTDiLep','WJets','Signal']
 class eval(object):
-    def __init__(self,infile,outdir,pathToModel,doBinary=False,do_multiClass = True,ClassList=None,mGo = 0 , mLSP = 0):
+    def __init__(self,infile,outdir,pathToModel,var_list,doBinary=False,do_multiClass = True,ClassList=None,mGo = 0 , mLSP = 0):
         self.infile        =  infile        
         self.outdir        =  outdir       
-        self.pathToModel   =  pathToModel         
+        self.pathToModel   =  pathToModel   
+        self.var_list      =  var_list
         self.doBinary      =  doBinary      
         self.do_multiClass =  do_multiClass 
         self.ClassList = ['TTSemiLep','TTDiLep','WJets','signal']
@@ -69,18 +68,18 @@ class eval(object):
 
         if self.do_multiClass : 
             self.model.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'],optimizer='adam')
-            prediction = self.model.predict_proba(df[var_list].values)
+            prediction = self.model.predict_proba(df[self.var_list].values)
             if not savepredicOnly : 
-                for mm, mult in enumerate(categoriesMultitarget) : 
+                for mm, mult in enumerate(self.ClassList) : 
                     df.loc[:,mult] = prediction[:,mm]
             else : 
-                df = pd.DataFrame(prediction,columns=categoriesMultitarget)
+                df = pd.DataFrame(prediction,columns=self.ClassList)
         elif self.doBinary:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
             if not savepredicOnly : 
-                df.loc[:,'DNN'] = self.model.predict(df[var_list])
+                df.loc[:,'DNN'] = self.model.predict(df[self.var_list])
             else :
-                df = pd.DataFrame(self.model.predict(df[var_list]),columns=["DNN"])
+                df = pd.DataFrame(self.model.predict(df[self.var_list]),columns=["DNN"])
         df.to_root(self.outdir+'/'+self.infile.split("/")[-1].replace('.root','_'+str(self.mGo)+'_'+str(self.mLSP)+'.root') ,key='sf/t')
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])
 
@@ -100,17 +99,17 @@ class eval(object):
 
         if self.do_multiClass : 
             self.model.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'],optimizer='adam')
-            prediction = self.model.predict_proba(df[var_list].values)
+            prediction = self.model.predict_proba(df[self.var_list].values)
             if not savepredicOnly : 
-                for mm, mult in enumerate(categoriesMultitarget) : 
+                for mm, mult in enumerate(self.ClassList) : 
                     df.loc[:,mult] = prediction[:,mm]
             else : 
-                df = pd.DataFrame(prediction,columns=categoriesMultitarget)
+                df = pd.DataFrame(prediction,columns=self.ClassList)
         elif self.doBinary:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
             if not savepredicOnly : 
-                df.loc[:,'DNN'] = self.model.predict(df[var_list])
-            else : df = pd.DataFrame(self.model.predict(df[var_list]),columns=["DNN"])
+                df.loc[:,'DNN'] = self.model.predict(df[self.var_list])
+            else : df = pd.DataFrame(self.model.predict(df[self.var_list]),columns=["DNN"])
             
         df.to_csv(self.outdir+'/'+self.infile.split("/")[-1].replace('.csv','_'+str(self.mGo)+'_'+str(self.mLSP)+'.csv'),index=None)
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])

@@ -109,6 +109,6 @@ if __name__ == '__main__':
                 job = htcondor.Submit(submit_parameters)
                 with schedd.transaction() as txn:
                         job.queue(txn)
-                        print ("Submit job for file {}".format(fc))
+                        #print ("Submit job for file {}".format(fc))
 
 

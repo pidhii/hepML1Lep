@@ -63,16 +63,15 @@ class hyperOpt(object):
 
         model = KerasClassifier(build_fn=self.create_model, verbose=0)
         # define the grid search parameters
-        batch_size = [256,512,1024,2048]
-        epochs = [10, 50, 100]
-        learn_rate = [0.001, 0.01, 0.1, 0.2, 0.3]
+        #batch_size = [256,512,1024,2048]
+        #epochs = [10, 50, 100]
+        learn_rate = [0.0001, 0.001, 0.1]
         #momentum = [0.0, 0.2, 0.4]
-        dropout_rate = [0.0,0.01,0.1, 0.2, 0.3, 0.4]
+        dropout_rate = [0.1,0.2, 0.3]
         X = self.trainDF[var_list].values
         Y = self.trainDF['isSignal'].values
         w = self.class_weights
-        param_grid = dict(batch_size=batch_size, epochs=epochs,
-                          learn_rate=learn_rate, dropout_rate=dropout_rate)  # momentum=momentum ,
+        param_grid = dict(learn_rate=learn_rate, dropout_rate=dropout_rate)  # momentum=momentum ,
         grid = GridSearchCV(estimator=model, param_grid=param_grid, n_jobs=-1)
         self.grid_result = grid.fit(X, Y )
 

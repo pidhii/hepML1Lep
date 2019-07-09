@@ -4,6 +4,7 @@ from MLClass.eval import eval
 import argparse
 
  
+var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt', 'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL','nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso","Lep_miniIso","iso_pt","iso_MT2","mGo", "mLSP"]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Runs a NAF batch system for nanoAOD', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -21,7 +22,7 @@ if __name__ == '__main__':
     mGo = args.mGo
     mLSP = args.mLSP
 
-    ev = eval(filename,outdir,model,mGo = mGo , mLSP = mLSP)
+    ev = eval(filename,outdir,model,var_list,mGo = mGo , mLSP = mLSP)
 
     if '.root' in filename : 
         ev.ev_score_toROOT(savepredicOnly=True)

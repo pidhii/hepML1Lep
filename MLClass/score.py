@@ -30,16 +30,15 @@ from sklearn.preprocessing import label_binarize
 from scipy import interp
 from itertools import cycle
 
-var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt' ,'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL',
-            'nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso",
-             "Lep_miniIso","iso_pt","iso_MT2", 'mGo', 'mLSP']
+
 class score(object):
-    def __init__(self,score,outdir,testDF,trainDF,class_weights,do_binary= False,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
+    def __init__(self,score,outdir,testDF,trainDF,class_weights,var_list,do_binary= False,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
         self.score               = score                  
         self.outdir              = outdir                 
         self.testDF              = testDF                 
         self.trainDF             = trainDF                
-        self.class_weights       = class_weights          
+        self.class_weights       = class_weights  
+        self.var_list            = var_list        
         self.do_binary           = do_binary        
         self.do_multiClass       = do_multiClass          
         self.nSignal_Cla         = nSignal_Cla            
@@ -64,7 +63,7 @@ class score(object):
     # # Train XGB / DNN / etc.  
 
     # This is a nice isolated set of actions, so we will put them into a method right away
-    def TrainXGB(self,train_DF,test_DF,var_list, n_estimators=150, max_depth=3, min_child_weight=1,seed=0):
+    def TrainXGB(self,train_DF,test_DF, n_estimators=150, max_depth=3, min_child_weight=1,seed=0):
         """ With training and testing DataFrame, and a list of variables with which to train and evaluate, produce the 
             score series for both the training and testing sets
         """
@@ -77,25 +76,25 @@ class score(object):
                             seed=seed)
 
         # Fit to the training set, making sure to include event weights
-        xgb.fit(train_DF[var_list], # X
+        xgb.fit(train_DF[self.var_list], # X
                 train_DF["isSignal"], # yii
                 sample_weight=train_DF["training_weight"], # weights
                 )
         
                 # Score the testing set
-        Xg_score_test = xgb.predict(test_DF[var_list])#[:,0]  # predict_proba returns [prob_bkg, prob_sig] which have the property prob_bkg+prob_sig = 1 so we only need one. Chose signal-ness
+        Xg_score_test = xgb.predict(test_DF[self.var_list])#[:,0]  # predict_proba returns [prob_bkg, prob_sig] which have the property prob_bkg+prob_sig = 1 so we only need one. Chose signal-ness
         # Score the training set (for overtraining analysis)
-        Xg_score_train = xgb.predict(train_DF[var_list])#[:,0] # predict_proba returns [prob_bkg, prob_sig] which have the property prob_bkg+prob_sig = 1 so we only need one. Chose signal-ness
+        Xg_score_train = xgb.predict(train_DF[self.var_list])#[:,0] # predict_proba returns [prob_bkg, prob_sig] which have the property prob_bkg+prob_sig = 1 so we only need one. Chose signal-ness
         Xg_score_test = pd.Series(Xg_score_test, index=test_DF.index) 
         Xg_score_train = pd.Series(Xg_score_train, index=train_DF.index) 
         return Xg_score_train, Xg_score_test
 
 
-    def TrainDNN(self,train_DF,test_DF,var_list,multi=False,nclass = 4,epochs=200,batch_size=1024,useDropOut = False,class_weights=None,loss=None):
+    def TrainDNN(self,train_DF,test_DF,multi=False,nclass = 4,epochs=200,batch_size=1024,useDropOut = False,class_weights=None,loss=None):
         """ With training and testing DataFrame, and a list of variables with which to train and evaluate, produce the 
             score series for both the training and testing sets
         """
-        NDIM = len(var_list)
+        NDIM = len(self.var_list)
         DNN = Sequential()
         DNN.add(Dense(256, input_dim=NDIM, kernel_initializer='uniform', activation='relu'))
         if useDropOut : 
@@ -130,7 +129,7 @@ class score(object):
                             save_weights_only=False, mode='auto', 
                             period=1)
 
-        history = DNN.fit(train_DF[var_list].values, 
+        history = DNN.fit(train_DF[self.var_list].values, 
                                 train_DF["isSignal"].values,
                                 epochs=epochs,
                                 batch_size=batch_size, 
@@ -140,12 +139,12 @@ class score(object):
                                 validation_split=0.25)
 
 
-        dnn_score_test = DNN.predict(test_DF[var_list])
-        dnn_score_train = DNN.predict(train_DF[var_list])
+        dnn_score_test = DNN.predict(test_DF[self.var_list])
+        dnn_score_train = DNN.predict(train_DF[self.var_list])
         ## better also to return the model it self 
         return dnn_score_test, dnn_score_train, history , DNN
     
-    def do_train(self,pretrained = False):
+    def do_train(self,nclass =4,epochs=10,batch_size=1024):
         "do the actual training , for fresh training"
         if self.score == 'DNN' : 
             print('let\'s do DNN training')
@@ -153,11 +152,10 @@ class score(object):
             print (self.trainDF.groupby(['isSignal']).size())
             self.dnn_score_test, self.dnn_score_train,self.history ,self.model = self.TrainDNN(self.trainDF, 
                                                     self.testDF,
-                                                    var_list,
                                                     multi=self.do_multiClass,
-                                                    nclass =4,
-                                                    epochs=10,
-                                                    batch_size=1024,
+                                                    nclass =nclass,
+                                                    epochs=epochs,
+                                                    batch_size=batch_size,
                                                     useDropOut = True,
                                                     class_weights = self.class_weights)
         elif self.score == 'XGB' : 
@@ -165,7 +163,6 @@ class score(object):
             print('let\'s do XGBoost training')
             self.Xg_score_train, self.Xg_score_test = self.TrainEval(self.trainDF, 
                                               self.testDF,
-                                              var_list,
                                               n_estimators=200, 
                                               max_depth=3,
                                               min_child_weight=1,
@@ -206,7 +203,7 @@ class score(object):
                                            verbose=0, save_best_only=True,
                                            save_weights_only=False, mode='auto',
                                            period=1)
-        self.history = self.model.fit(self.trainDF[var_list].values,
+        self.history = self.model.fit(self.trainDF[self.var_list].values,
                           self.trainDF["isSignal"].values,
                           epochs=10,
                           batch_size=1024,
@@ -216,8 +213,8 @@ class score(object):
                           callbacks=[early_stopping, model_checkpoint],
                           validation_split=0.25)
 
-        self.dnn_score_test = self.model.predict(self.testDF[var_list])
-        self.dnn_score_train = self.model.predict(self.trainDF[var_list])
+        self.dnn_score_test = self.model.predict(self.testDF[self.var_list])
+        self.dnn_score_train = self.model.predict(self.trainDF[self.var_list])
         ## better also to return the model it self
         self.save_model(self.model,append='_2nd')
     def performance_plot(self,history,dnn_score_test,dnn_score_train,append=''):
@@ -402,14 +399,15 @@ class score(object):
         plt.clf()
         #plt.show()
 
-    def heatMap(self,DFrame,var_list=var_list,append=''):
+    def heatMap(self,DFrame,append=''):
         import seaborn
         outputplot=os.path.join(self.outdir,'plots')
         if not os.path.exists(outputplot): os.makedirs(outputplot)
         
         for multitarget in range(0,len(self.class_names)) :
             print ("multitarget ="+str(multitarget))
-            corr_mat = DFrame.loc[(DFrame["isSignal"]==multitarget), var_list].astype(float).corr() #
+            corr_mat = DFrame.loc[(DFrame["isSignal"]==multitarget), self.var_list].astype(float).corr() #
             fig, ax = plt.subplots(figsize=(20, 12)) 
             Hmap = seaborn.heatmap(corr_mat, square=True, ax=ax, vmin=-1., vmax=1.,annot=True)
             Hmap.figure.savefig(outputplot+'/Class_'+str(self.class_names[multitarget])+append+'_hmx.pdf', transparent=True, bbox_inches='tight')
+
