@@ -108,6 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('--outdir', help='output directory', metavar='outdir')
     parser.add_argument('--exec', help="wight directory", default='./batch/dfconv_exec.sh', metavar='exec')
     parser.add_argument('--batchMode','-b', help='Batch mode.',default=False, action='store_true')
+    parser.add_argument('--ana','-A', help='which analysis you want delphes or 1Lep skimmed tree, [1Lep,Delp]',default='1Lep',  metavar='ana')
 
     
     args = parser.parse_args()
@@ -117,7 +118,7 @@ if __name__ == '__main__':
     logdir = outdir+'/Logs' 
     batch = args.batchMode
     infile = args.infile
-
+    ana = args.ana
     wdir = os.getcwd()
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -135,7 +136,7 @@ if __name__ == '__main__':
             ##Condor configuration
             submit_parameters = { 
                 "executable"                : execu,
-                "arguments"                 : " ".join([fc,outdir,wdir]),
+                "arguments"                 : " ".join([fc,outdir,wdir,ana]),
                 "universe"                  : "vanilla",
                 "should_transfer_files"     : "YES",
                 "log"                       : "{}/job_$(Cluster)_$(Process).log".format(logdir),
@@ -150,4 +151,11 @@ if __name__ == '__main__':
                     job.queue(txn)
                     print ("Submit job for file {}".format(fc))
     if not batch : 
-        convert1LepTree(infile,outdir,flatten=True,select="nLep >= 1 && nJets30Clean >= 1 && HT > 500 && LT > 250")
+        if ana == '1Lep' :
+            convert1LepTree(infile,outdir,flatten=True,select="nLep >= 1 && nJets30Clean >= 1 && HT > 500 && LT > 250")
+        elif ana == 'Delp' : 
+            array = convertTree(infile, signal=False,passFilePath=True,tlVectors = ['selJet','sel_lep'])
+            #print (array)
+            array.to_csv(outdir+'/'+infile.split('/')[-1].replace('.root','.csv'),index=None) 
+        else : 
+            print ('print options can be only 1Lep or Delp')
