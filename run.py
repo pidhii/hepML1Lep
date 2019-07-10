@@ -9,11 +9,17 @@ loadmodel = False
 pathToModel = './testing/model/1Lep_DNN_Multiclass'
 append=''
 
-
+# variables to be used in the training 
 var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt', 'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL','nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso","Lep_miniIso","iso_pt","iso_MT2","mGo", "mLSP"]
 
+# variables to be used in while transfere DFs
+VARS = ["MET","MT","Jet2_pt","Jet1_pt","nLep","Lep_pt","Selected","nVeto","LT","HT",
+        "nBCleaned_TOTAL","nBJet","nTop_Total_Combined","nJets30Clean","dPhi","met_caloPt",
+        "lheHTIncoming","genTau_grandmotherId","genTau_motherId","genLep_grandmotherId",
+        "genLep_motherId","DiLep_Flag","semiLep_Flag","genWeight","sumOfWeights","btagSF",
+        "puRatio","lepSF","nISRttweight","GenMET","Lep_relIso","Lep_miniIso","iso_pt","iso_MT2"]
 
-Data = PrepData("/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_resTop/",'/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_resTop/csvs')
+Data = PrepData("/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_resTop/",'/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_resTop/csvs',VARS)
 
 Data.saveCSV()
 splitted = splitDFs(Data.df_all['sig'],Data.df_all['bkg'])

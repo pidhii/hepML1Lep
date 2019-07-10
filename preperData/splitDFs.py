@@ -9,13 +9,8 @@ from sklearn.utils import class_weight
 import os
 Mass_points = [[1900,1000]]#,[2200,100],[2200,800],[1900,800],[1900,100],[1500,1000],[1500,1200],[1700,1200],[1600,1100],[1800,1300]]
 signal_Cla = [[[1600,1100],[1800,1300],[1500,1000],[1500,1200],[1700,1200]],[[1900,100],[2200,100],[2200,800],[1900,800],[1900,1000]]]
-do_hyperOpt = False
 to_drop = ['lheHTIncoming', 'genTau_grandmotherId', 'genTau_motherId', 'genLep_grandmotherId',
                'genLep_motherId', 'DiLep_Flag', 'semiLep_Flag', 'GenMET',  'filename']
-
-var_list = ['MET', 'MT', 'Jet2_pt','Jet1_pt' ,'nLep', 'Lep_pt', 'Selected', 'nVeto', 'LT', 'HT', 'nBCleaned_TOTAL',
-    'nTop_Total_Combined', 'nJets30Clean', 'dPhi',"Lep_relIso",
-    "Lep_miniIso","iso_pt","iso_MT2"]
 
 class splitDFs(object):
     def __init__(self,signalDF, bkgDF,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
@@ -28,6 +23,9 @@ class splitDFs(object):
         self.split_Sign_training = split_Sign_training
     # function to get the index of each class of background
     def classidxs(self):
+        """
+        function to find idex for each  bkg class for multiclass training
+        """
         self.SemiLep_TT_index   = self.bkgDF[self.bkgDF['filename'].str.contains('TTJets_SingleLeptonFrom')].index
         self.DiLep_TT_index     = self.bkgDF[self.bkgDF['filename'].str.contains('TTJets_DiLepton')].index
         #QCD_index        = self.bkgDF[self.bkgDF['filename'].str.contains('QCD')].index
@@ -52,6 +50,9 @@ class splitDFs(object):
 
     ## this is very usful when you need to sample background class to preper it for the parametric training
     def _overbalance_bkg(self,signals_df_list,bkg_df):
+        """
+        Return Oversampled dataset for parametric training
+        """
         new_bkg_train = pd.DataFrame()
         bkg_df = bkg_df.copy()
         for ns in signals_df_list : 
@@ -62,6 +63,9 @@ class splitDFs(object):
 
         
     def sigidxs(self):
+        '''
+         Function to find the indexes of each signal mass point from the big signal DF
+        '''
         self.list_of_mass_idxs = []
         self.signal_list_names = [] 
         for massP in Mass_points:
@@ -182,7 +186,7 @@ class splitDFs(object):
                 ## for the last training over all the samples (the multiClass trainig)
                 self.df_all['all_sig'] = pd.concat([self.df_all['all_sig'],self.df_all[self.signal_list_names[num]]])
                 #del self.df_all[self.signal_list_names[num]]
-
+            # if doing binary classification then overwrite the bkgclass numbers by 0 and signal to 1 
             self.df_all['all_sig'] = self.df_all['all_sig'].reset_index()    
             self.df_all['all_bkg'].loc[self.SemiLep_TT_index,'isSignal'] = 0
             self.df_all['all_bkg'].loc[self.DiLep_TT_index,'isSignal'] = 0
@@ -205,6 +209,7 @@ class splitDFs(object):
             del sigdf
 
     def split(self,sigdfnew,bkgdfnew,train_size=0.6, test_size=0.4, shuffle=True, random_state=0) :
+        "Function to split the DFs into testing and training supsets "
         print ('now splitting the samples with the options : ','train_size = ', train_size, 'test_size = ',test_size, 'shuffle = ',shuffle, 'random_state = ',random_state)
         # write df1 content in file.csv
         

@@ -18,20 +18,14 @@ params = {}
 _df_all_ev={}
 _df_all = {}
 
-VARS = ["MET","MT","Jet2_pt","Jet1_pt","nLep","Lep_pt","Selected","nVeto","LT","HT",
-        "nBCleaned_TOTAL","nBJet","nTop_Total_Combined","nJets30Clean","dPhi","met_caloPt",
-        "lheHTIncoming","genTau_grandmotherId","genTau_motherId","genLep_grandmotherId",
-        "genLep_motherId","DiLep_Flag","semiLep_Flag","genWeight","sumOfWeights","btagSF",
-        "puRatio","lepSF","nISRttweight","GenMET","Lep_relIso","Lep_miniIso","iso_pt","iso_MT2"]
-#saveDF = False
-
 class PrepData(object):
-    def __init__(self,inputdir,outdir,skipexisting = False,cuts=None, exclude = None):
+    def __init__(self,inputdir,outdir,VARS,skipexisting = False,cuts=None, exclude = None):
         self.path = inputdir
         self.outdir = outdir
         self.cuts = cuts
         self.exclude = exclude
         self.df_all = {}
+        self.VARS   = VARS
         if skipexisting : 
             shutil.rmtree(self.outdir)
             os.makedirs(self.outdir)
@@ -70,7 +64,7 @@ class PrepData(object):
                 #if "genMET" in b : continue 
                 print(b) 
                 it = uproot.open(b)["sf/t"]
-                p_df = it.pandas.df(VARS+["Xsec"])
+                p_df = it.pandas.df(self.VARS+["Xsec"])
                 p_df['filename'] = np.array(b.split("/")[-1].replace(".root","").replace("evVarFriend_","").replace("_ext",""))
                 bkg_df = pd.concat([p_df, df], ignore_index=True)
                 df = pd.concat([p_df, df], ignore_index=True)
@@ -105,7 +99,7 @@ class PrepData(object):
                 print(s) 
                 its = uproot.open(s)["sf/t"]
                 #print it.arrays(VARS)
-                p_dfs = its.pandas.df(VARS+['susyXsec','mGo','mLSP','susyNgen','nISRweight'])
+                p_dfs = its.pandas.df(self.VARS+['susyXsec','mGo','mLSP','susyNgen','nISRweight'])
                 p_dfs['filename'] = np.array(s.split("/")[-1].replace(".root","").replace("evVarFriend_","").replace("_ext",""))
                 sig_df = pd.concat([p_dfs, dfs], ignore_index=True)
                 dfs = pd.concat([p_dfs, dfs], ignore_index=True)
