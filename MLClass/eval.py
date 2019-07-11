@@ -16,12 +16,11 @@ import pandas as pd
 import numpy as np
 
 class eval(object):
-    def __init__(self,infile,outdir,pathToModel,var_list,doBinary=False,do_multiClass = True,ClassList=None,mGo = 0 , mLSP = 0):
+    def __init__(self,infile,outdir,pathToModel,var_list,do_multiClass = True,ClassList=None,mGo = 0 , mLSP = 0):
         self.infile        =  infile        
         self.outdir        =  outdir       
         self.pathToModel   =  pathToModel   
         self.var_list      =  var_list
-        self.doBinary      =  doBinary      
         self.do_multiClass =  do_multiClass 
         self.ClassList = ['TTSemiLep','TTDiLep','WJets','signal']
         self.mGo = mGo 
@@ -74,7 +73,7 @@ class eval(object):
                     df.loc[:,mult] = prediction[:,mm]
             else : 
                 df = pd.DataFrame(prediction,columns=self.ClassList)
-        elif self.doBinary:
+        else:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
             if not savepredicOnly : 
                 df.loc[:,'DNN'] = self.model.predict(df[self.var_list])
@@ -105,7 +104,7 @@ class eval(object):
                     df.loc[:,mult] = prediction[:,mm]
             else : 
                 df = pd.DataFrame(prediction,columns=self.ClassList)
-        elif self.doBinary:
+        else:
             self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
             if not savepredicOnly : 
                 df.loc[:,'DNN'] = self.model.predict(df[self.var_list])

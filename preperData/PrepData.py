@@ -19,11 +19,9 @@ _df_all_ev={}
 _df_all = {}
 
 class PrepData(object):
-    def __init__(self,inputdir,outdir,VARS,skipexisting = False,cuts=None, exclude = None):
+    def __init__(self,inputdir,outdir,VARS,skipexisting = False):
         self.path = inputdir
         self.outdir = outdir
-        self.cuts = cuts
-        self.exclude = exclude
         self.df_all = {}
         self.VARS   = VARS
         if skipexisting : 

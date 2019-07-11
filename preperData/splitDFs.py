@@ -180,6 +180,7 @@ class splitDFs(object):
             else : self.df_all['all_bkg'] = self.bkgDF.copy()
 
         elif not self.do_multiClass : 
+            #self.df_all['all_bkg'] = pd.DataFrame()
             for num ,idxs in enumerate(self.list_of_mass_idxs) : 
                 self.df_all[self.signal_list_names[num]] = self.signalDF.loc[idxs ,:]
                 self.df_all[self.signal_list_names[num]].loc[:,'isSignal'] = 1
@@ -188,9 +189,9 @@ class splitDFs(object):
                 #del self.df_all[self.signal_list_names[num]]
             # if doing binary classification then overwrite the bkgclass numbers by 0 and signal to 1 
             self.df_all['all_sig'] = self.df_all['all_sig'].reset_index()    
-            self.df_all['all_bkg'].loc[self.SemiLep_TT_index,'isSignal'] = 0
-            self.df_all['all_bkg'].loc[self.DiLep_TT_index,'isSignal'] = 0
-            self.df_all['all_bkg'].loc[self.WJets_others_index,'isSignal'] = 0
+            self.bkgDF.loc[self.SemiLep_TT_index,'isSignal'] = 0 #pd.Series(np.zeros(self.bkgDF.shape[0]), index=self.bkgDF.index)
+            self.bkgDF.loc[self.DiLep_TT_index,'isSignal'] = 0
+            self.bkgDF.loc[self.WJets_others_index,'isSignal'] = 0
             if self.do_parametric : 
                 signal_list_dfs = [] 
                 for name in  self.signal_list_names : 
@@ -198,6 +199,7 @@ class splitDFs(object):
                 #print signal_list_dfs
                 self.df_all['all_bkg'] = self._overbalance_bkg(signal_list_dfs,self.bkgDF)
             else : self.df_all['all_bkg'] = self.bkgDF.copy()
+            del self.bkgDF
             ## free up the memeory from all other dfs 
             bkgdf =  self.df_all['all_bkg'].copy()
             sigdf =  self.df_all['all_sig'].copy()

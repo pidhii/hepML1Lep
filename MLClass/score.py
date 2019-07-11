@@ -32,19 +32,18 @@ from itertools import cycle
 
 
 class score(object):
-    def __init__(self,score,outdir,testDF,trainDF,class_weights,var_list,do_binary= False,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
+    def __init__(self,score,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None):
         self.score               = score                  
         self.outdir              = outdir                 
         self.testDF              = testDF                 
         self.trainDF             = trainDF                
         self.class_weights       = class_weights  
         self.var_list            = var_list        
-        self.do_binary           = do_binary        
         self.do_multiClass       = do_multiClass          
         self.nSignal_Cla         = nSignal_Cla            
         self.do_parametric       = do_parametric          
         self.split_Sign_training = split_Sign_training
-        self.class_names         = ['TTSemiLep','TTDiLep','WJets','signal']
+        self.class_names         = class_names
 
     # ## Define the model
     # We'll start with a dense (fully-connected) NN layer.
@@ -98,15 +97,15 @@ class score(object):
         DNN = Sequential()
         DNN.add(Dense(256, input_dim=NDIM, kernel_initializer='uniform', activation='relu'))
         if useDropOut : 
-            DNN.add(Dropout(0.01))
+            DNN.add(Dropout(0.1))
         DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
         if useDropOut : 
-            DNN.add(Dropout(0.01))
+            DNN.add(Dropout(0.1))
         DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
         # Compile model
         if multi == False :
             if useDropOut : 
-                DNN.add(Dropout(0.01))
+                DNN.add(Dropout(0.1))
             DNN.add(Dense(1, kernel_initializer='uniform', activation='sigmoid'))
             # if you want to change the loss function in the first stage
             if loss is not None : 
@@ -115,7 +114,7 @@ class score(object):
                 DNN.compile(loss='binary_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.0001))
         elif multi == True :
             if useDropOut : 
-                DNN.add(Dropout(0.01))
+                DNN.add(Dropout(0.1))
             DNN.add(Dense(nclass, kernel_initializer='uniform', activation='softmax'))
             DNN.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.001))
 
@@ -175,10 +174,15 @@ class score(object):
         if not os.path.exists(output): os.makedirs(output)
         # serialize model to JSON
         model_json = model_toSave.to_json()
-        with open(output+"/1Lep_DNN_Multiclass"+append+".json", "w") as json_file:
+        string = '1Lep_DNN_'
+        if self.do_multiClass : 
+            string += 'Multiclass'
+        else : 
+            string += 'Binary'
+        with open(output+'/'+string+append+".json", "w") as json_file:
             json_file.write(model_json)
         # serialize weights to HDF5
-        model_toSave.save_weights(output+"/1Lep_DNN_Multiclass"+append+".h5")
+        model_toSave.save_weights(output+'/'+string+append+".h5")
         print("Saved model to disk")
         json_file.close()
         
@@ -271,18 +275,10 @@ class score(object):
         predictions labeled as you want'''
         print (' plotting the ROC for binary score ')
         # Compute ROC curve and area under the curve
-        if not isinstance(y_preds,dict):
-            assert not y_test is None,'Need to include testing set if not passing dict'
-            y_preds={'ROC':y_preds}
-        else:
-            y_test=y_preds['truth']
+        fpr, tpr, thresholds = roc_curve(y_test, y_preds)
+        roc_auc = auc(fpr, tpr)
 
-        for name,y_pred in y_preds.iteritems():
-            if name=='truth': continue
-            fpr, tpr, thresholds = roc_curve(y_test, y_pred)
-            roc_auc = auc(fpr, tpr)
-
-            plt.plot(fpr, tpr, lw=1, label=name+' (area = %0.2f)'%(roc_auc))
+        plt.plot(fpr, tpr, lw=1, label=' (area = %0.2f)'%(roc_auc))
 
         plt.plot([0, 1], [0, 1], '--', color=(0.6, 0.6, 0.6), label='Luck')
 
