@@ -4,6 +4,7 @@ import sys,os
 import htcondor
 import argparse
 
+import time 
 def find_all_matching(substring, path):
     result = []
     for root, dirs, files in os.walk(path):
@@ -82,9 +83,18 @@ if __name__ == '__main__':
 
              }
             job = htcondor.Submit(submit_parameters)
-            with schedd.transaction() as txn:
-                    job.queue(txn)
-                    print ("Submit job for file {}".format(fc))
+            #with schedd.transaction() as txn:
+            #        job.queue(txn)
+            #        print ("Submit job for file {}".format(fc))
+            while(True):
+                try: 
+                    with schedd.transaction() as txn:
+                        job.queue(txn)
+                        print ("Submit job for file {}".format(fc))
+                    break    
+
+                except: 
+                    pass
     elif mult : 
         
         mlist = masslist('./mass_list.txt')
@@ -107,8 +117,16 @@ if __name__ == '__main__':
 
                  }
                 job = htcondor.Submit(submit_parameters)
-                with schedd.transaction() as txn:
-                        job.queue(txn)
-                        #print ("Submit job for file {}".format(fc))
+                #with schedd.transaction() as txn:
+                #        job.queue(txn)
+                #        print ("Submit job for file {}".format(fc))
+                while(True):
+                    try: 
+                        with schedd.transaction() as txn:
+                            job.queue(txn)
+                            print ("Submit job for file {}".format(fc))
+                        break    
 
+                    except: 
+                        pass
 
