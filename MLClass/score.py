@@ -143,7 +143,7 @@ class score(object):
         ## better also to return the model it self 
         return dnn_score_test, dnn_score_train, history , DNN
     
-    def do_train(self,nclass =4,epochs=10,batch_size=1024):
+    def do_train(self,nclass =4,epochs=10,batch_size=1024,loss=None):
         "do the actual training , for fresh training"
         if self.score == 'DNN' : 
             print('let\'s do DNN training')
@@ -156,7 +156,8 @@ class score(object):
                                                     epochs=epochs,
                                                     batch_size=batch_size,
                                                     useDropOut = True,
-                                                    class_weights = self.class_weights)
+                                                    class_weights = self.class_weights,
+                                                    loss=loss)
         elif self.score == 'XGB' : 
             #Run XGB
             print('let\'s do XGBoost training')

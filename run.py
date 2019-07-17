@@ -5,6 +5,9 @@ from MLClass.score import score
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import confusion_matrix
 
+## copied from A.Elwood https://github.com/aelwood/hepML/blob/master/MlFunctions/DnnFunctions.py
+from MlFunctions.DnnFunctions import significanceLoss,significanceLossInvert,significanceLoss2Invert,significanceLossInvertSqrt,significanceFull,asimovSignificanceLoss,asimovSignificanceLossInvert,asimovSignificanceFull,truePositive,falsePositive
+
 # if you want to use a pretrained model activate it and give the model path wthout any extension
 loadmodel = False
 pathToModel = './testing/model/1Lep_DNN_Multiclass'
@@ -45,7 +48,8 @@ if loadmodel :
     scoreing.load_model(pathToModel, loss='sparse_categorical_crossentropy') # mode will be save automatically
 else : 
     # nClass will be ignored in binary classification tasks anywayes
-    scoreing.do_train(nclass =len(class_names),epochs=5,batch_size=1024)
+    # loss = None will use the normal cross entropy change it if you want to whatever defined in MlFunctions/DnnFunctions.py
+    scoreing.do_train(nclass =len(class_names),epochs=5,batch_size=1024,loss=None)
     #scoreing.load_model()
     scoreing.save_model(scoreing.model) # here we need to enforce saving it
 ##########################

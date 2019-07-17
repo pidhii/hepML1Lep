@@ -25,11 +25,11 @@ def masslist(masslist):
         #print (line.split(" "))
         mGo = line_.split(" ")[0]
         mLSP = line_.split(" ")[-1]
-        if (float(mGo) > 1900 and float(mGo) < 2300 ):
-            if (float(mLSP)) > 1000 : continue
-        elif (float(mGo) < 1900 and float(mGo) > 1400) : 
-            if (float(mLSP) < 1000 or float(mLSP) > 1350) : continue 
-        else : continue 
+        #if (float(mGo) > 1900 and float(mGo) < 2300 ):
+        #    if (float(mLSP)) > 1000 : continue
+        #elif (float(mGo) < 1900 and float(mGo) > 1400) : 
+        #    if (float(mLSP) < 1000 or float(mLSP) > 1350) : continue 
+        #else : continue 
         small_list.append(mGo)
         small_list.append(mLSP)
         #print (small_list)
