@@ -103,10 +103,12 @@ if __name__ == '__main__':
             mGo = mass[0]
             mLSP = mass[1]
             for fc in Filenamelist : 
+                # modify the outdir 
+                newoutDir = os.path.join(outdir,str(mGo)+'_'+str(mLSP))
                 ##Condor configuration
                 submit_parameters = { 
                     "executable"                : execu,
-                    "arguments"                 : " ".join([fc, outdir,model,wdir,mGo,mLSP]),
+                    "arguments"                 : " ".join([fc,newoutDir,model,wdir,mGo,mLSP]),
                     "universe"                  : "vanilla",
                     "should_transfer_files"     : "YES",
                     "log"                       : "{}/job_$(Cluster)_$(Process).log".format(logdir),
