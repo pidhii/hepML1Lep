@@ -4,39 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-fig_style = {
-    'figsize': (5, 5),
-}
-
-ratio_fig_style = {
-    'figsize': (5, 5),
-    'gridspec_kw': {'height_ratios': (3, 1)},
-}
-
-stack_style = {
-    'edgecolor': (0, 0, 0, 0.5),
-}
-
-hatch_style = {
-    'facecolor': 'none',
-    'edgecolor': (0, 0, 0, 0.5),
-    'linewidth': 0,
-    'hatch': '///',
-}
-
-errorbar_style = {
-    'linestyle': 'none',
-    'marker': '.',
-    'elinewidth': 1,
-    'capsize': 1,
-    'color': 'k',
-}
-
-shaded_style = {
-    'facecolor': (0,0,0,0.3),
-    'linewidth': 0
-}
-
 class pandasplot(object) : 
     def __init__(self,outdir,var,cuts=None,weights = None) : 
         self.outdir     = outdir 

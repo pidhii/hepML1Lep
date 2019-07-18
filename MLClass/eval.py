@@ -79,7 +79,7 @@ class eval(object):
                 df.loc[:,'DNN'] = self.model.predict(df[self.var_list])
             else :
                 df = pd.DataFrame(self.model.predict(df[self.var_list]),columns=["DNN"])
-        df.to_root(self.outdir+'/'+self.infile.split("/")[-1].replace('.root','_'+str(self.mGo)+'_'+str(self.mLSP)+'.root') ,key='sf/t')
+        df.to_root(self.outdir+'/'+self.infile.split("/")[-1],key='sf/t')
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])
 
     def ev_score_toDF(self,savepredicOnly=False):
@@ -110,5 +110,5 @@ class eval(object):
                 df.loc[:,'DNN'] = self.model.predict(df[self.var_list])
             else : df = pd.DataFrame(self.model.predict(df[self.var_list]),columns=["DNN"])
             
-        df.to_csv(self.outdir+'/'+self.infile.split("/")[-1].replace('.csv','_'+str(self.mGo)+'_'+str(self.mLSP)+'.csv'),index=None)
+        df.to_csv(self.outdir+'/'+self.infile.split("/")[-1],index=None)
         print ("out put fle is wrote to ",self.outdir+'/'+self.infile.split("/")[-1])
