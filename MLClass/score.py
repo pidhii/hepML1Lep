@@ -89,34 +89,45 @@ class score(object):
         return Xg_score_train, Xg_score_test
 
 
-    def TrainDNN(self,train_DF,test_DF,multi=False,nclass = 4,epochs=200,batch_size=1024,useDropOut = False,class_weights=None,loss=None):
+    def TrainDNN(self, train_DF, test_DF, extra_layers, multi=False, nclass=4, \
+            epochs=200, batch_size=1024, useDropOut=False, class_weights=None, \
+            loss=None):
         """ With training and testing DataFrame, and a list of variables with which to train and evaluate, produce the 
             score series for both the training and testing sets
         """
         NDIM = len(self.var_list)
         DNN = Sequential()
+
         DNN.add(Dense(256, input_dim=NDIM, kernel_initializer='uniform', activation='relu'))
-        if useDropOut : 
-            DNN.add(Dropout(0.1))
+
+        if useDropOut: DNN.add(Dropout(0.1))
         DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
-        if useDropOut : 
-            DNN.add(Dropout(0.1))
+
+        if useDropOut: DNN.add(Dropout(0.1))
         DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
+
+        for i in range(extra_layers):
+            if useDropOut: DNN.add(Dropout(0.1))
+            DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
+
         # Compile model
         if multi == False :
-            if useDropOut : 
-                DNN.add(Dropout(0.1))
+            if useDropOut: DNN.add(Dropout(0.1))
             DNN.add(Dense(1, kernel_initializer='uniform', activation='sigmoid'))
+
             # if you want to change the loss function in the first stage
-            if loss is not None : 
+            if loss is not None: 
                 DNN.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=0.0001))
-            else : 
+            else: 
                 DNN.compile(loss='binary_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.0001))
         elif multi == True :
             if useDropOut : 
                 DNN.add(Dropout(0.1))
             DNN.add(Dense(nclass, kernel_initializer='uniform', activation='softmax'))
-            DNN.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.001))
+
+            # XXX
+            # DNN.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.001))
+            DNN.compile(loss=loss, metrics=['accuracy'], optimizer=Adam(lr=0.001))
 
         DNN.summary()
         # Train DNN classifier
@@ -143,21 +154,25 @@ class score(object):
         ## better also to return the model it self 
         return dnn_score_test, dnn_score_train, history , DNN
     
-    def do_train(self,nclass =4,epochs=10,batch_size=1024,loss=None):
+    def do_train(self, nclass=4, epochs=10, batch_size=1024, loss=None, extra_layers=0):
         "do the actual training , for fresh training"
         if self.score == 'DNN' : 
             print('let\'s do DNN training')
             ## Run the method we have just defined
-            print (self.trainDF.groupby(['isSignal']).size())
-            self.dnn_score_test, self.dnn_score_train,self.history ,self.model = self.TrainDNN(self.trainDF, 
-                                                    self.testDF,
-                                                    multi=self.do_multiClass,
-                                                    nclass =nclass,
-                                                    epochs=epochs,
-                                                    batch_size=batch_size,
-                                                    useDropOut = True,
-                                                    class_weights = self.class_weights,
-                                                    loss=loss)
+            print(self.trainDF.groupby(['isSignal']).size())
+            self.dnn_score_test, self.dnn_score_train, self.history, self.model = \
+                self.TrainDNN(
+                    self.trainDF, 
+                    self.testDF,
+                    multi = self.do_multiClass,
+                    nclass = nclass,
+                    epochs = epochs,
+                    batch_size = batch_size,
+                    useDropOut = True,
+                    class_weights = self.class_weights,
+                    loss = loss,
+                    extra_layers = extra_layers
+                )
         elif self.score == 'XGB' : 
             #Run XGB
             print('let\'s do XGBoost training')
@@ -187,7 +202,7 @@ class score(object):
         print("Saved model to disk")
         json_file.close()
         
-    def load_model(self,pathToModel,loss=None):
+    def load_model(self, pathToModel, epochs, loss=None, learn_rate=0.0001):
         '''Load a previously saved model (in h5 format)'''
         # load json and create model
         json_file = open(pathToModel+'.json', 'r')
@@ -196,7 +211,7 @@ class score(object):
         self.model = model_from_json(loaded_model_json)
         # load weights into new model
         self.model.load_weights(pathToModel+'.h5')
-        self.model.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=0.0001))
+        self.model.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=learn_rate))
 
         self.model.summary()
         # Train DNN classifier
@@ -210,7 +225,7 @@ class score(object):
                                            period=1)
         self.history = self.model.fit(self.trainDF[self.var_list].values,
                           self.trainDF["isSignal"].values,
-                          epochs=10,
+                          epochs=epochs,
                           batch_size=1024,
                           # train_DF["Finalweight"].values,#*train_DF["training_weight"],
                                       class_weight=self.class_weights,

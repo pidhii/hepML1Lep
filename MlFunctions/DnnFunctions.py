@@ -4,6 +4,8 @@ from keras.models import Sequential
 from keras.layers import Dense,Dropout
 from keras import regularizers
 from keras import backend as K
+import math
+import tensorflow as tf
 
 def findLayerSize(layer,refSize):
 
@@ -12,7 +14,7 @@ def findLayerSize(layer,refSize):
     elif isinstance(layer, int):
         return layer
     else:
-        print 'WARNING: layer must be int or float'
+        print('WARNING: layer must be int or float')
         return None
         
 ## copied from A.Elwood https://github.com/aelwood/hepML/blob/master/MlFunctions/DnnFunctions.py
@@ -81,8 +83,12 @@ def createDenseModel(inputSize=None,outputSize=None,hiddenLayers=[1.0],dropOut=N
     return model
 
 def significanceLoss(expectedSignal,expectedBkgd):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
+
+    1 / Eq. 4.5 -- ✗ (maximisation)
+    '''
 
 
     def sigLoss(y_true,y_pred):
@@ -99,9 +105,12 @@ def significanceLoss(expectedSignal,expectedBkgd):
     return sigLoss
 
 def significanceLossInvert(expectedSignal,expectedBkgd):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    Eq. 4.5 -- ✓
+    '''
 
     def sigLossInvert(y_true,y_pred):
         #Continuous version:
@@ -112,14 +121,17 @@ def significanceLossInvert(expectedSignal,expectedBkgd):
         s = signalWeight*K.sum(y_pred*y_true)
         b = bkgdWeight*K.sum(y_pred*(1-y_true))
 
-        return (s+b)/(s*s+K.epsilon()) #Add the epsilon to avoid dividing by 0
+        return (s+b)/(s*s+K.epsilon()) # Add the epsilon to avoid dividing by 0
 
     return sigLossInvert
 
 def significanceLoss2Invert(expectedSignal,expectedBkgd):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    Eq. 4.5 (with b >> s) -- ✓
+    '''
 
     def sigLoss2Invert(y_true,y_pred):
         #Continuous version:
@@ -135,9 +147,12 @@ def significanceLoss2Invert(expectedSignal,expectedBkgd):
     return sigLoss2Invert
 
 def significanceLossInvertSqrt(expectedSignal,expectedBkgd):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    sqrt(Eq. 4.5) -- ✓
+    '''
 
     def sigLossInvert(y_true,y_pred):
         #Continuous version:
@@ -153,11 +168,13 @@ def significanceLossInvertSqrt(expectedSignal,expectedBkgd):
     return sigLossInvert
 
 
-
 def significanceFull(expectedSignal,expectedBkgd):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    sqrt(1 / Eq. 4.5) -- ✗ (maximisation)
+    '''
 
     def significance(y_true,y_pred):
         #Discrete version
@@ -174,9 +191,12 @@ def significanceFull(expectedSignal,expectedBkgd):
 
 
 def asimovSignificanceLoss(expectedSignal,expectedBkgd,systematic):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    -(Eq. 3.1)^2 -- ✓
+    '''
 
     def asimovSigLoss(y_true,y_pred):
         #Continuous version:
@@ -188,33 +208,52 @@ def asimovSignificanceLoss(expectedSignal,expectedBkgd,systematic):
         b = bkgdWeight*K.sum(y_pred*(1-y_true))
         sigB=systematic*b
 
-        return -2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon())) #Add the epsilon to avoid dividing by 0
+        ln1_top = (s + b)*(b + sigB*sigB)
+        ln1_bot = b*b + (s + b)*sigB*sigB
+        ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
+
+        ln2 = K.log(1. + sigB*sigB*s/(b*(b + sigB*sigB) + K.epsilon()))
+
+        return 10000. -2.*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) #Add the epsilon to avoid dividing by 0
 
     return asimovSigLoss
 
 def asimovSignificanceLossInvert(expectedSignal,expectedBkgd,systematic):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    (1 / Eq. 3.1)^2 -- ✓
+    '''
 
     def asimovSigLossInvert(y_true,y_pred):
         #Continuous version:
 
-        signalWeight=expectedSignal/K.sum(y_true)
-        bkgdWeight=expectedBkgd/K.sum(1-y_true)
+        signalWeight = expectedSignal/K.sum(y_true)
+        bkgdWeight = expectedBkgd/K.sum(1-y_true)
 
         s = signalWeight*K.sum(y_pred*y_true)
         b = bkgdWeight*K.sum(y_pred*(1-y_true))
-        sigB=systematic*b
+        sigB = systematic*b
 
-        return 1./(2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon()))) #Add the epsilon to avoid dividing by 0
+        # ln1_top = (s + b)*(b + sigB*sigB)
+        # ln1_bot = b*b + (s + b)*sigB*sigB
+        # ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
+
+        # ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
+
+        return 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon()) #Add the epsilon to avoid dividing by 0
+        # return 1./(2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon()))) #Add the epsilon to avoid dividing by 0
 
     return asimovSigLossInvert
 
 def asimovSignificanceFull(expectedSignal,expectedBkgd,systematic):
-    '''Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size'''
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
 
+    Eq. 3.1 -- ✗ (maximization)
+    '''
 
     def asimovSignificance(y_true,y_pred):
         #Continuous version:
@@ -226,7 +265,13 @@ def asimovSignificanceFull(expectedSignal,expectedBkgd,systematic):
         b = bkgdWeight*K.sum(K.round(y_pred)*(1-y_true))
         sigB=systematic*b
 
-        return K.sqrt(2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon()))) #Add the epsilon to avoid dividing by 0
+        ln1_top = (s + b)*(b + sigB*sigB)
+        ln1_bot = b*b + (s + b)*sigB*sigB
+        ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
+
+        ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
+
+        return K.sqrt(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon()))) #Add the epsilon to avoid dividing by 0
 
     return asimovSignificance
 
