@@ -236,11 +236,11 @@ def asimovSignificanceLossInvert(expectedSignal,expectedBkgd,systematic):
         b = bkgdWeight*K.sum(y_pred*(1-y_true))
         sigB = systematic*b
 
-        # ln1_top = (s + b)*(b + sigB*sigB)
-        # ln1_bot = b*b + (s + b)*sigB*sigB
-        # ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
+        ln1_top = (s + b)*(b + sigB*sigB)
+        ln1_bot = b*b + (s + b)*sigB*sigB
+        ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
 
-        # ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
+        ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
 
         return 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon()) #Add the epsilon to avoid dividing by 0
         # return 1./(2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon()))) #Add the epsilon to avoid dividing by 0
