@@ -29,6 +29,7 @@ def helpAndExit(err = 0):
     print("     --learn-rate   <learn-rate> = 0.0001")
     print("     --test")
     print("     --lsp-mass     <mass of LSP>")
+    print("     --batch-mode")
     quit(err)
 
 # Mandatory arguments.
@@ -45,6 +46,7 @@ MODEL_PATH = None
 LEARN_RATE = 0.0001
 TEST = False
 MLSP = 1000
+BATCHMODE = False
 
 lumi = 30. #luminosity in /fb
 SIG = 17.6*0.059*lumi #cross section of stop sample in fb times efficiency measured by Marco
@@ -67,7 +69,8 @@ long_opts = [
     "load-model=",
     "learn-rate=",
     "test",
-    "lsp-mass="
+    "lsp-mass=",
+    "batch-mode"
 ];
 try:
     opts, args = getopt.getopt(sys.argv[1:], "hD:o:", long_opts)
@@ -106,6 +109,8 @@ for opt, arg in opts:
         TEST = True
     elif opt in ("--lsp-mass"):
         MLSP = float(arg)
+    elif opt in ("--batch-mode"):
+        BATCHMODE = True
     else:
         print("Error: undefined command line option,", opt)
         helpAndExit(1)
@@ -232,8 +237,9 @@ else:
 
 if TEST:
     # Evaluate DNN in test-mode.
-    print("\x1b[38;5;3;1m---\x1b[0m test model")
-    scoreing.eval(batch_size=BATCH_SIZE)
+    # print("\x1b[38;5;3;1m---\x1b[0m test model")
+    # scoreing.eval(batch_size=BATCH_SIZE)
+    pass
 else:
     # Train.
     print("\x1b[38;5;3;1m---\x1b[0m training")
@@ -245,11 +251,12 @@ else:
 ##########################
 # start the performance plottng 
 # 1- the DNN score plots
-print("\x1b[38;5;3;1m---\x1b[0m import plotting modules")
-from plotClass.pandasplot import pandasplot
+print("\x1b[38;5;3;1m---\x1b[0m get model predictions")
 train_s_df = pd.DataFrame(scoreing.score_train())
 test_s_df = pd.DataFrame(scoreing.score_test())
 
+print("\x1b[38;5;3;1m---\x1b[0m import plotting modules")
+from plotClass.pandasplot import pandasplot
 from ROOT import TCanvas, TH1F, TGraph, TLegend
 from math import log, sqrt
 import numpy as np
@@ -405,4 +412,4 @@ scoreing.plot_confusion_matrix(train_cm, classes=class_names, normalize=True,
 scoreing.heatMap(splitted.test_DF, append=append)
 ##########################
 
-ROOT.gApplication.Run()
+if not BATCHMODE: ROOT.gApplication.Run()

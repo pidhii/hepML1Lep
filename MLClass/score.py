@@ -101,7 +101,7 @@ class score(object):
             self.trainDF["isSignal"].values,
             epochs           = epochs,
             batch_size       = batch_size, 
-            # sample_weight    = self.trainDF["Finalweight"].values,
+            sample_weight    = self.trainDF["Finalweight"].values,
             verbose          = 1, # switch to 1 for more verbosity 
             callbacks        = [early_stopping, model_checkpoint], 
             validation_split = 0.25
@@ -123,10 +123,10 @@ class score(object):
 
     def eval(self, batch_size):
         self.model.evaluate(
-            self.trainDF[self.var_list].values, 
-            self.trainDF["isSignal"].values,
+            self.testDF[self.var_list].values, 
+            self.testDF["isSignal"].values,
             batch_size    = batch_size, 
-            # sample_weight = self.trainDF["Finalweight"].values,
+            sample_weight = self.trainDF["Finalweight"].values,
             verbose       = 1 # switch to 1 for more verbosity 
         )
 
