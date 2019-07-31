@@ -4,8 +4,10 @@ from keras.models import Sequential
 from keras.layers import Dense,Dropout
 from keras import regularizers
 from keras import backend as K
+import keras
 import math
 import tensorflow as tf
+import sys
 
 def findLayerSize(layer,refSize):
 
@@ -246,6 +248,52 @@ def asimovSignificanceLossInvert(expectedSignal,expectedBkgd,systematic):
         # return 1./(2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon()))) #Add the epsilon to avoid dividing by 0
 
     return asimovSigLossInvert
+
+def multiclass(systematic):
+    '''
+    Define a loss function that calculates the significance based on fixed
+    expected signal and expected background yields for a given batch size.
+
+    (1 / Eq. 3.1)^2 -- ✓
+    '''
+
+    def loss(y_true,y_pred):
+        tf.print(y_true, output_stream=sys.stderr)
+        print("--- \x1b[38;5;2;1mshape(y_true)\x1b[0m =", K.int_shape(y_true)[1])
+        return keras.losses.categorical_crossentropy(y_true, y_pred)
+
+		# Asimov significance for signal
+        y_true_asi = tf.map_fn(lambda x: tf.gather(x, 3), y_true)
+        y_pred_asi = tf.map_fn(lambda x: tf.gather(x, 3), y_pred)
+
+        # sep_asi = tf.constant([0, 0, 0, 1], shape=[0, 4])
+        # y_true_asi = sep_asi * y_true
+        # y_pred_asi = sep_asi * y_pred
+
+        s = K.sum(y_pred_asi*y_true_asi)
+        b = K.sum(y_pred_asi*(1-y_true_asi))
+        sigB = systematic*b
+
+        ln1_top = (s + b)*(b + sigB*sigB)
+        ln1_bot = b*b + (s + b)*sigB*sigB
+        ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
+
+        ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
+
+        loss_3 = 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon())
+
+        # Binary cross entropy for background
+        y_true_bg = tf.map_fn(lambda x: tf.gather(x, [0, 1, 2]), y_true)
+        y_pred_bg = tf.map_fn(lambda x: tf.gather(x, [0, 1, 2]), y_pred)
+
+        loss_012 = keras.losses.categorical_crossentropy(y_true_bg, y_pred_bg)
+
+        # return loss_3 + K.sum(loss_012)
+        # return tf.stack([loss_012, loss_3])
+        return loss_3
+		
+
+    return loss
 
 def asimovSignificanceFull(expectedSignal,expectedBkgd,systematic):
     '''

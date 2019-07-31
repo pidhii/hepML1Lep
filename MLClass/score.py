@@ -29,11 +29,11 @@ import datetime
 from sklearn.preprocessing import label_binarize
 from scipy import interp
 from itertools import cycle
+import tensorflow as tf
 
 
 class score(object):
-    def __init__(self,score,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None):
-        self.score               = score                  
+    def __init__(self,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None):
         self.outdir              = outdir                 
         self.testDF              = testDF                 
         self.trainDF             = trainDF                
@@ -45,145 +45,101 @@ class score(object):
         self.split_Sign_training = split_Sign_training
         self.class_names         = class_names
 
-    # ## Define the model
-    # We'll start with a dense (fully-connected) NN layer.
-    # Our model will have a single fully-connected hidden layer with the same number of neurons as input variables. 
-    # The weights are initialized using a small Gaussian random number. 
-    # We will switch between linear and tanh activation functions for the hidden layer.
-    # The output layer contains a single neuron in order to make predictions. 
-    # It uses the sigmoid activation function in order to produce a probability output in the range of 0 to 1.
-    # 
-    # We are using the `binary_crossentropy` loss function during training, a standard loss function for binary classification problems. 
-    # We will optimize the model with the Adam algorithm for stochastic gradient descent and we will collect accuracy metrics while the model is trained.
-
-    # ## Run training 
-    # Here, we run the training.
-
-    # # Train XGB / DNN / etc.  
-
-    # This is a nice isolated set of actions, so we will put them into a method right away
-    def TrainXGB(self,train_DF,test_DF, n_estimators=150, max_depth=3, min_child_weight=1,seed=0):
-        """ With training and testing DataFrame, and a list of variables with which to train and evaluate, produce the 
-            score series for both the training and testing sets
-        """
-        
-        
-        # Create XGB object with the hyperparameters desired
-        xgb = XGBClassifier(n_estimators=n_estimators,
-                            max_depth=max_depth, 
-                            min_child_weight=min_child_weight,
-                            seed=seed)
-
-        # Fit to the training set, making sure to include event weights
-        xgb.fit(train_DF[self.var_list], # X
-                train_DF["isSignal"], # yii
-                sample_weight=train_DF["training_weight"], # weights
-                )
-        
-                # Score the testing set
-        Xg_score_test = xgb.predict(test_DF[self.var_list])#[:,0]  # predict_proba returns [prob_bkg, prob_sig] which have the property prob_bkg+prob_sig = 1 so we only need one. Chose signal-ness
-        # Score the training set (for overtraining analysis)
-        Xg_score_train = xgb.predict(train_DF[self.var_list])#[:,0] # predict_proba returns [prob_bkg, prob_sig] which have the property prob_bkg+prob_sig = 1 so we only need one. Chose signal-ness
-        Xg_score_test = pd.Series(Xg_score_test, index=test_DF.index) 
-        Xg_score_train = pd.Series(Xg_score_train, index=train_DF.index) 
-        return Xg_score_train, Xg_score_test
-
-
-    def TrainDNN(self, train_DF, test_DF, extra_layers, multi=False, nclass=4, \
-            epochs=200, batch_size=1024, useDropOut=False, class_weights=None, \
-            loss=None):
-        """ With training and testing DataFrame, and a list of variables with which to train and evaluate, produce the 
-            score series for both the training and testing sets
-        """
+    def _buildDNN(self, multi, loss, learn_rate, nclass, dropout, \
+            extra_layers):
         NDIM = len(self.var_list)
         DNN = Sequential()
 
         DNN.add(Dense(256, input_dim=NDIM, kernel_initializer='uniform', activation='relu'))
 
-        if useDropOut: DNN.add(Dropout(0.1))
+        if dropout: DNN.add(Dropout(0.1))
         DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
 
-        if useDropOut: DNN.add(Dropout(0.1))
+        if dropout: DNN.add(Dropout(0.1))
         DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
 
         for i in range(extra_layers):
-            if useDropOut: DNN.add(Dropout(0.1))
+            if dropout: DNN.add(Dropout(0.1))
             DNN.add(Dense(256, kernel_initializer='uniform', activation='relu'))
 
         # Compile model
-        if multi == False :
-            if useDropOut: DNN.add(Dropout(0.1))
+        if multi == False:
+            if dropout: DNN.add(Dropout(0.1))
             DNN.add(Dense(1, kernel_initializer='uniform', activation='sigmoid'))
-
-            # if you want to change the loss function in the first stage
-            if loss is not None: 
-                DNN.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=0.0001))
-            else: 
-                DNN.compile(loss='binary_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.0001))
-        elif multi == True :
-            if useDropOut : 
-                DNN.add(Dropout(0.1))
+            DNN.compile(
+                loss      = loss or 'binary_crossentropy',
+                metrics   = ['accuracy'],
+                optimizer = Adam(lr=learn_rate)
+            )
+        elif multi == True:
+            if dropout: DNN.add(Dropout(0.1))
             DNN.add(Dense(nclass, kernel_initializer='uniform', activation='softmax'))
+            DNN.compile(
+                loss      = loss or 'sparse_categorical_crossentropy',
+                metrics   = ['accuracy'],
+                optimizer = Adam(lr=learn_rate)
+            )
 
-            # XXX
-            # DNN.compile(loss='sparse_categorical_crossentropy',metrics=['accuracy'], optimizer=Adam(lr=0.001))
-            DNN.compile(loss=loss, metrics=['accuracy'], optimizer=Adam(lr=0.001))
+        return DNN
 
-        DNN.summary()
-        # Train DNN classifier
+    def _fit(self, epochs, batch_size):
+        # model checkpoint callback
+        # this saves our model architecture + parameters into dense_model.h5
         early_stopping = EarlyStopping(monitor='val_loss', patience=10)
-            # model checkpoint callback
-            # this saves our model architecture + parameters into dense_model.h5
-        model_checkpoint = ModelCheckpoint('dense_model.h5', monitor='val_loss', 
-                            verbose=0, save_best_only=True, 
-                            save_weights_only=False, mode='auto', 
-                            period=1)
+        model_checkpoint = ModelCheckpoint('dense_model.h5',
+            monitor           = 'val_loss', 
+            verbose           = 0,
+            save_best_only    = True, 
+            save_weights_only = False,
+            mode              = 'auto', 
+            period            = 1
+        )
 
-        history = DNN.fit(train_DF[self.var_list].values, 
-                                train_DF["isSignal"].values,
-                                epochs=epochs,
-                                batch_size=batch_size, 
-                                class_weight = class_weights,#train_DF["Finalweight"].values,#*train_DF["training_weight"],
-                                verbose=1, # switch to 1 for more verbosity 
-                                callbacks=[early_stopping, model_checkpoint], 
-                                validation_split=0.25)
+        # Train the model.
+        return self.model.fit(
+            self.trainDF[self.var_list].values, 
+            self.trainDF["isSignal"].values,
+            epochs           = epochs,
+            batch_size       = batch_size, 
+            # sample_weight    = self.trainDF["Finalweight"].values,
+            verbose          = 1, # switch to 1 for more verbosity 
+            callbacks        = [early_stopping, model_checkpoint], 
+            validation_split = 0.25
+        )
 
-
-        dnn_score_test = DNN.predict(test_DF[self.var_list])
-        dnn_score_train = DNN.predict(train_DF[self.var_list])
-        ## better also to return the model it self 
-        return dnn_score_test, dnn_score_train, history , DNN
+    def build(self, loss, multi=False, nclass=4, extra_layers=0, learn_rate=0.0001, dropout=True):
+        self.model = self._buildDNN(
+            multi        = multi,
+            loss         = loss,
+            learn_rate   = learn_rate,
+            nclass       = nclass,
+            dropout      = dropout,
+            extra_layers = extra_layers
+        )
+        self.model.summary()
     
-    def do_train(self, nclass=4, epochs=10, batch_size=1024, loss=None, extra_layers=0):
-        "do the actual training , for fresh training"
-        if self.score == 'DNN' : 
-            print('let\'s do DNN training')
-            ## Run the method we have just defined
-            print(self.trainDF.groupby(['isSignal']).size())
-            self.dnn_score_test, self.dnn_score_train, self.history, self.model = \
-                self.TrainDNN(
-                    self.trainDF, 
-                    self.testDF,
-                    multi = self.do_multiClass,
-                    nclass = nclass,
-                    epochs = epochs,
-                    batch_size = batch_size,
-                    useDropOut = True,
-                    class_weights = self.class_weights,
-                    loss = loss,
-                    extra_layers = extra_layers
-                )
-        elif self.score == 'XGB' : 
-            #Run XGB
-            print('let\'s do XGBoost training')
-            self.Xg_score_train, self.Xg_score_test = self.TrainEval(self.trainDF, 
-                                              self.testDF,
-                                              n_estimators=200, 
-                                              max_depth=3,
-                                              min_child_weight=1,
-                                              seed=0,
-                                              cla = 'xgb')
-        
+    def train(self, epochs=10, batch_size=1024):
+        self.history = self._fit(epochs=epochs, batch_size=batch_size)
+
+    def eval(self, batch_size):
+        self.model.evaluate(
+            self.trainDF[self.var_list].values, 
+            self.trainDF["isSignal"].values,
+            batch_size    = batch_size, 
+            # sample_weight = self.trainDF["Finalweight"].values,
+            verbose       = 1 # switch to 1 for more verbosity 
+        )
+
+    def score_test(self):
+        if not hasattr(self, 'dnn_score_test'):
+            self.dnn_score_test = self.model.predict(self.testDF[self.var_list])
+        return self.dnn_score_test
+
+    def score_train(self):
+        if not hasattr(self, 'dnn_score_train'):
+            self.dnn_score_train = self.model.predict(self.trainDF[self.var_list])
+        return self.dnn_score_train
+
     def save_model(self,model_toSave,append=''):
         '''Save the model'''
         output=os.path.join(self.outdir,'model')
@@ -191,9 +147,9 @@ class score(object):
         # serialize model to JSON
         model_json = model_toSave.to_json()
         string = '1Lep_DNN_'
-        if self.do_multiClass : 
+        if self.do_multiClass: 
             string += 'Multiclass'
-        else : 
+        else: 
             string += 'Binary'
         with open(output+'/'+string+append+".json", "w") as json_file:
             json_file.write(model_json)
@@ -202,7 +158,7 @@ class score(object):
         print("Saved model to disk")
         json_file.close()
         
-    def load_model(self, pathToModel, epochs, loss=None, learn_rate=0.0001):
+    def load_model(self, pathToModel, loss=None, learn_rate=0.0001):
         '''Load a previously saved model (in h5 format)'''
         # load json and create model
         json_file = open(pathToModel+'.json', 'r')
@@ -214,29 +170,7 @@ class score(object):
         self.model.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=learn_rate))
 
         self.model.summary()
-        # Train DNN classifier
-        
-        # model checkpoint callback
-        # this saves our model architecture + parameters into dense_model.h5
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10)
-        model_checkpoint = ModelCheckpoint('dense_model.h5', monitor='val_loss',
-                                           verbose=0, save_best_only=True,
-                                           save_weights_only=False, mode='auto',
-                                           period=1)
-        self.history = self.model.fit(self.trainDF[self.var_list].values,
-                          self.trainDF["isSignal"].values,
-                          epochs=epochs,
-                          batch_size=1024,
-                          # train_DF["Finalweight"].values,#*train_DF["training_weight"],
-                                      class_weight=self.class_weights,
-                          verbose=1,  # switch to 1 for more verbosity
-                          callbacks=[early_stopping, model_checkpoint],
-                          validation_split=0.25)
 
-        self.dnn_score_test = self.model.predict(self.testDF[self.var_list])
-        self.dnn_score_train = self.model.predict(self.trainDF[self.var_list])
-        ## better also to return the model it self
-        self.save_model(self.model,append='_2nd')
     def performance_plot(self,history,dnn_score_test,dnn_score_train,append=''):
         # Make an example plot with two subplots...
         """
