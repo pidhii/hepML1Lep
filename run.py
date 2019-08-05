@@ -21,7 +21,7 @@ def helpAndExit(err = 0):
     print("     --data         <path-to-root-files>")
     print("  -o --outdir       <path-for-plots> = <working-directory>")
     print("     --epochs       <N-epochs> = 100")
-    print("     --loss         <loss-function> = None")
+    print("     --loss         <loss-function> = 'None'")
     print("     --extra-layers <N-extra-layers> = 0")
     print("     --batch-size   <batch-size> = 1024")
     print("     --multiclass")
@@ -30,6 +30,7 @@ def helpAndExit(err = 0):
     print("     --test")
     print("     --lsp-mass     <mass of LSP>")
     print("     --batch-mode")
+    print("     --class-weights")
     quit(err)
 
 # Mandatory arguments.
@@ -38,7 +39,7 @@ DATA_DIR = "/nfs/dust/cms/user/amohamed/susy-desy/CMGSamples/FR_forMVA_nosplit_r
 WORK_DIR = None
 OUT_DIR = None
 EPOCHS = 100
-LOSS = None
+LOSS = 'None'
 EXTRA_LAYERS = 0
 BATCH_SIZE = 1024
 MULTICLASS = False
@@ -47,12 +48,15 @@ LEARN_RATE = 0.0001
 TEST = False
 MLSP = 1000
 BATCHMODE = False
+MONITOR = 'val_loss'
+CLASSWEIGHTS = False
 
 lumi = 30. #luminosity in /fb
-SIG = 17.6*0.059*lumi #cross section of stop sample in fb times efficiency measured by Marco
+# SIG = 17.6*0.059*lumi #cross section of stop sample in fb times efficiency measured by Marco
 #expectedSignal = 228.195*0.14*lumi #leonid's number
-BG = 844000.*8.2e-4*lumi #cross section of ttbar sample in fb times efficiency measured by Marco
-SYS = 0.1 #systematic for the asimov signficance
+# BG = 844000.*8.2e-4*lumi #cross section of ttbar sample in fb times efficiency measured by Marco
+# SYS = 0.1 #systematic for the asimov signficance
+LUMI = 35.9E+03
 
 # Parse command line.
 long_opts = [
@@ -70,7 +74,9 @@ long_opts = [
     "learn-rate=",
     "test",
     "lsp-mass=",
-    "batch-mode"
+    "batch-mode",
+    "monitor=",
+    "class-weights"
 ];
 try:
     opts, args = getopt.getopt(sys.argv[1:], "hD:o:", long_opts)
@@ -108,9 +114,13 @@ for opt, arg in opts:
     elif opt in ('--test'):
         TEST = True
     elif opt in ("--lsp-mass"):
-        MLSP = float(arg)
+        MLSP = int(arg)
     elif opt in ("--batch-mode"):
         BATCHMODE = True
+    elif opt in ("--monitor"):
+        MONITOR = arg
+    elif opt in ('--class-weights'):
+        CLASSWEIGHTS = True
     else:
         print("Error: undefined command line option,", opt)
         helpAndExit(1)
@@ -140,10 +150,14 @@ print("{}: {}".format(orange("N extra layers"), EXTRA_LAYERS))
 print("{}: {}".format(orange("batch size"), BATCH_SIZE))
 print("{}: {}".format(orange("multiclass"), MULTICLASS))
 print("{}: {}".format(orange("learn rate"), LEARN_RATE))
+print("{}: {}".format(orange("Mlsp"), MLSP))
+print("{}: {}".format(orange("monitor"), MONITOR))
 if MODEL_PATH is not None:
     print("{}: {}".format(blue("model"), MODEL_PATH))
 if TEST:
     print(blue("test mode"))
+if CLASSWEIGHTS:
+  print(blue("use class weights"))
 if not input("confirm? ").lower() in ("y", "yes"):
     print("aborting");
     exit(0)
@@ -152,13 +166,17 @@ if not input("confirm? ").lower() in ("y", "yes"):
 # Main
 #
 print("\x1b[38;5;3;1m---\x1b[0m import ML-modules")
+import preperData
 from preperData.splitDFs import splitDFs
 from preperData.PrepData import PrepData
 from MLClass.score import score
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import confusion_matrix
 # copied from A.Elwood https://github.com/aelwood/hepML/blob/master/MlFunctions/DnnFunctions.py
-from MlFunctions.DnnFunctions import significanceLoss,significanceLossInvert,significanceLoss2Invert,significanceLossInvertSqrt,significanceFull,asimovSignificanceLoss,asimovSignificanceLossInvert,asimovSignificanceFull,truePositive,falsePositive,multiclass
+from MlFunctions.DnnFunctions import significanceLoss,significanceLossInvert,significanceLoss2Invert,significanceLossInvertSqrt,significanceFull,asimovSignificanceLoss,asimovSignificanceLossInvert,asimovSignificanceFull,truePositive,falsePositive
+import MlFunctions.DnnFunctions as loss
+
+preperData.splitDFs.set_Mlsp(MLSP)
 
 # Validate loss-function.
 print("\x1b[38;5;3;1m---\x1b[0m validate loss")
@@ -206,25 +224,32 @@ Data.saveCSV()
 
 # preper the data and split them into testing sample + training sample
 print("\x1b[38;5;3;1m---\x1b[0m split data")
-splitted = splitDFs(Data.df_all['sig'],Data.df_all['bkg'],do_multiClass = MULTICLASS,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False)
+splitted = splitDFs(
+    Data.df_all['sig'],
+    Data.df_all['bkg'],
+    do_multiClass = MULTICLASS,
+    nSignal_Cla = 1,
+    do_parametric = True,
+    split_Sign_training = False
+)
 splitted.prepare()
-splitted.split(splitted.df_all['all_sig'],splitted.df_all['all_bkg'])
+splitted.split(splitted.df_all['all_sig'], splitted.df_all['all_bkg'])
 
 ##########################
 # init the modele 
-print("splited:", pd.isna(splitted.train_DF["mLSP"]))
 print("\x1b[38;5;3;1m---\x1b[0m initialize model")
 scoreing = score(
     WORK_DIR,
     splitted.test_DF,
     splitted.train_DF,
-    splitted.class_weights,
-    var_list=var_list,
+    splitted.class_weights if CLASSWEIGHTS else None,
+    var_list = var_list,
     do_multiClass = MULTICLASS,
     nSignal_Cla = 1,
     do_parametric = True,
     split_Sign_training = False,
-    class_names=class_names
+    class_names = class_names,
+    monitor = MONITOR
 )
 
 # Build the model or load the pretrained one.
@@ -233,7 +258,7 @@ if loadmodel:
     scoreing.load_model(MODEL_PATH, loss=LOSS)
 else: 
     print("\x1b[38;5;3;1m---\x1b[0m build model")
-    scoreing.build(multi = MULTICLASS, nclass=len(class_names), loss=LOSS, dropout=True, extra_layers=EXTRA_LAYERS)
+    scoreing.build(multi=MULTICLASS, nclass=len(class_names), loss=LOSS, dropout=True, extra_layers=EXTRA_LAYERS)
 
 if TEST:
     # Evaluate DNN in test-mode.
@@ -255,128 +280,43 @@ print("\x1b[38;5;3;1m---\x1b[0m get model predictions")
 train_s_df = pd.DataFrame(scoreing.score_train())
 test_s_df = pd.DataFrame(scoreing.score_test())
 
+print("train_s_df:", train_s_df)
+print("test_s_df:", test_s_df)
+
 print("\x1b[38;5;3;1m---\x1b[0m import plotting modules")
 from plotClass.pandasplot import pandasplot
-from ROOT import TCanvas, TH1F, TGraph, TLegend
-from math import log, sqrt
-import numpy as np
-
-NBINS = 30
+import plots
+# from ROOT import TCanvas, TH1F, TGraph, TLegend
+# from math import log, sqrt
+# import numpy as np
 
 ###############################################################################
 # Classifier Output plot
 #
 print("\x1b[38;5;3;1m---\x1b[0m plotting classifier output")
+classplot = plots.Classifier(test_s_df, scoreing, multi = MULTICLASS)
 
-# Create histograms.
-h_class_sig = TH1F("h_class_sig", "Classification", NBINS, 0, 1)
-h_class_bg = TH1F("h_class_bg", "Classification", NBINS, 0, 1)
+a = classplot.signal().GetBinContent(0)
+b = classplot.signal().Integral()
+c = classplot.signal().GetBinContent(plots.NBINS+1)
+print("total signal: {} + {} + {} = {}".format(a, b, c, a + b + c))
 
-h_class_sig_w = TH1F("h_class_sig_w", "Classification (weighted)", NBINS, 0, 1)
-h_class_bg_w = TH1F("h_class_bg_w", "Classification (weighted)", NBINS, 0, 1)
+a = classplot.background().GetBinContent(0)
+b = classplot.background().Integral()
+c = classplot.background().GetBinContent(plots.NBINS+1)
+print("total background: {} + {} + {} = {}".format(a, b, c, a + b + c))
 
-# Fill histograms.
-issigs = scoreing.testDF["isSignal"].values
-ws = scoreing.testDF["Finalweight"].values
-cs = test_s_df[0].values
-for issig, w, x in zip(issigs, ws, cs):
-    if issig == 1:
-        h_class_sig.Fill(x)
-        h_class_sig_w.Fill(x, w)
-    else:
-        h_class_bg.Fill(x)
-        h_class_bg_w.Fill(x, w)
+classplot.prepare()
+classplot.draw()
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Non-weighted histograms.
-#
-c_class = TCanvas()
-c_class.SetLogy()
-
-leg = TLegend(0.7, 0.9, 0.9, 0.7)
-
-# Draw signal-histogram.
-h_class_sig.GetXaxis().SetTitle("classification")
-h_class_sig.SetFillColor(8)
-h_class_sig.SetLineColor(8)
-h_class_sig.SetFillStyle(3002)
-h_class_sig.SetMaximum(max(
-    h_class_sig.GetBinContent(h_class_sig.GetMaximumBin()),
-    h_class_bg.GetBinContent(h_class_bg.GetMaximumBin())
-))
-h_class_sig.Draw()
-
-# Draw background-histogram.
-h_class_bg.SetFillColor(46)
-h_class_bg.SetLineColor(46)
-h_class_bg.SetFillStyle(3002)
-h_class_bg.Draw('SAME')
-
-leg.AddEntry(h_class_sig, "signal")
-leg.AddEntry(h_class_bg, "background")
-leg.Draw('SAME')
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Weighted histograms.
-#
-c_class_w = TCanvas()
-c_class_w.SetLogy()
-
-leg_w = TLegend(0.7, 0.9, 0.9, 0.7)
-
-h_class_sig_w.GetXaxis().SetTitle("classification")
-h_class_sig_w.SetFillColor(8)
-h_class_sig_w.SetLineColor(8)
-h_class_sig_w.SetFillStyle(3002)
-h_class_sig_w.SetMaximum(max(
-    h_class_sig_w.GetBinContent(h_class_sig_w.GetMaximumBin()),
-    h_class_bg_w.GetBinContent(h_class_bg_w.GetMaximumBin())
-))
-h_class_sig_w.Draw()
-
-# Draw background-histogram.
-h_class_bg_w.SetFillColor(46)
-h_class_bg_w.SetLineColor(46)
-h_class_bg_w.SetFillStyle(3002)
-h_class_bg_w.Draw('SAME')
-
-leg_w.AddEntry(h_class_sig_w, "signal")
-leg_w.AddEntry(h_class_bg_w, "background")
-leg_w.Draw('SAME')
 
 ###############################################################################
 # Asimov significance vs Cut on Classifier output.
 #
 print("\x1b[38;5;3;1m---\x1b[0m plotting asimov significance vs cut on classifier output")
-
-# Asimov significance
-def Z(s,b,sig=None):
-    #if sig == None: sig=eps
-		try:
-			return sqrt(-2.0/(sig*sig)*log(1.0 + b*(sig*sig)*s/(b+(b*b)*(sig*sig)))+ \
-						 2.0*(s+b)*log((s+b)*(b+(b*b)*(sig*sig))/( (b*b)+(s+b)*(b*b)*(sig*sig))))
-		except Exception as e:
-			return 0
-
-# h_cut = TH1F("h_cut", "Z_{A} vs Score Cut", NBINS, 0, 1)
-g_y = []
-g_x = []
-for i in range(1, NBINS+1):
-    s = h_class_sig_w.Integral(i, NBINS)
-    b = h_class_bg_w.Integral(i, NBINS)
-    g_y.append(Z(s, b, 0.1))
-    g_x.append(1./NBINS * i)
-
-ys = np.array(g_y)
-xs = np.array(g_x)
-g = TGraph(len(ys), xs, ys)
-
-c_g = TCanvas("c_g")
-g.SetLineColor(9)
-g.SetLineWidth(2)
-g.GetYaxis().SetTitle("Asimov significance")
-g.GetXaxis().SetTitle("Cut on classifier score")
-g.Draw()
+asiplot = plots.Significance(classplot.signal(), classplot.background())
+asiplot.prepare()
+asiplot.draw()
 
 
 full_test = pd.concat([scoreing.testDF,test_s_df],axis=1)

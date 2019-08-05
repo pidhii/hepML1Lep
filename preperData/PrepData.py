@@ -19,44 +19,49 @@ _df_all_ev={}
 _df_all = {}
 
 class PrepData(object):
-    def __init__(self,inputdir,outdir,VARS,skipexisting = False):
+    def __init__(self, inputdir, outdir, VARS, skipexisting=False):
         self.path = inputdir
         self.outdir = outdir
         self.df_all = {}
         self.VARS   = VARS
-        if skipexisting : 
+        if skipexisting: 
             shutil.rmtree(self.outdir)
             os.makedirs(self.outdir)
         elif not os.path.exists(outdir):
             os.makedirs(self.outdir)
         #self.saveDF_ = saveDF
     
-    # this is a function to look for specific pattern in directory and then get back with the list of matched files 
+    # this is a function to look for specific pattern in directory
+    # and then get back with the list of matched files 
     def find_all_matching(self,substring):
         self.result = []
         for root, dirs, files in os.walk(self.path):
             for thisfile in files:
                 if substring in thisfile:
-                    self.result.append(os.path.join(root, thisfile ))
+                    self.result.append(os.path.join(root, thisfile))
 
     def saveCSV(self):
         all_files = self.find_all_matching(".root")
         csv_dir = self.outdir
         sig_files = [ x for x in self.result if 'T1tttt' in x ]
         bkg_files = [ x for x in self.result if not 'T1tttt' in x ] 
+
         # check if the DFs are already in place  
-        if os.path.exists(csv_dir+'/MultiClass_background.csv') :
+        if os.path.exists(csv_dir+'/MultiClass_background.csv'):
             print ("background DF is already in place, no need to produce it again ")
             self.df_all['bkg'] = pd.read_csv(csv_dir+'/MultiClass_background.csv',index_col=None) 
-        else : self.df_all['bkg'] = pd.DataFrame()
+        else:
+          self.df_all['bkg'] = pd.DataFrame()
 
-        if os.path.exists(csv_dir+'/MultiClass_signal.csv') : 
+        if os.path.exists(csv_dir+'/MultiClass_signal.csv'): 
             print ("signal DF is already in place, no need to produce it again ")
             self.df_all['sig'] = pd.read_csv(csv_dir+'/MultiClass_signal.csv',index_col=None) 
-        else : self.df_all['sig'] = pd.DataFrame()
-        if self.df_all['bkg'].empty : 
+        else:
+            self.df_all['sig'] = pd.DataFrame()
+
+        if self.df_all['bkg'].empty: 
             print ("self.df_all['bkg'] is empty i will look for the input root files to convert them")
-            df =  pd.DataFrame()
+            df = pd.DataFrame()
             for b in bkg_files: 
                 #for block in it:
                 #if "genMET" in b : continue 
@@ -80,30 +85,67 @@ class PrepData(object):
             del df
             del p_df
             del bkg_df
-            # place the final weight (Xsec * all other SFs / total sum of weights)
-            self.df_all['bkg'].loc[:,'Finalweight'] = self.df_all['bkg'].Xsec*self.df_all['bkg'].btagSF*self.df_all['bkg'].puRatio*self.df_all['bkg'].lepSF*self.df_all['bkg'].nISRttweight*self.df_all['bkg'].genWeight/self.df_all['bkg'].sumOfWeights
-            # drop unnecessary variables
-            self.df_all['bkg'] = self.df_all['bkg'].drop(['sumOfWeights','genWeight','nISRttweight','Xsec','btagSF','lepSF','puRatio'],axis=1)
 
-        if self.df_all['sig'].empty : 
-            print ("self.df_all['sig'] is empty i will look for the input root files to convert them")
+            # place the final weight (Xsec * all other SFs / total sum of weights)
+            self.df_all['bkg'].loc[:,'Finalweight'] \
+              = self.df_all['bkg'].Xsec \
+              * self.df_all['bkg'].btagSF \
+              * self.df_all['bkg'].puRatio \
+              * self.df_all['bkg'].lepSF \
+              * self.df_all['bkg'].nISRttweight \
+              * self.df_all['bkg'].genWeight \
+              / self.df_all['bkg'].sumOfWeights
+
+            # drop unnecessary variables
+            self.df_all['bkg'] = self.df_all['bkg'].drop(
+                [
+                  'sumOfWeights',
+                  'genWeight',
+                  'nISRttweight',
+                  'Xsec',
+                  'btagSF',
+                  'lepSF',
+                  'puRatio'
+                ],
+                axis=1
+            )
+
+        if self.df_all['sig'].empty: 
+            print (
+                "self.df_all['sig'] is empty",
+                "i will look for the input root files to convert them"
+            )
             dfs =  pd.DataFrame()
             for s in sig_files: 
-                if "TuneCP2" in s : continue 
-                if "evVarFriend_SMS_T1ttttCP5_MVA" in s : continue 
-                if '22_points' in s : continue 
+                if "TuneCP2" in s: continue 
+                if "evVarFriend_SMS_T1ttttCP5_MVA" in s: continue 
+                if '22_points' in s: continue 
+
                 #if '_15_01' in s : continue
                 #for block in it:
                 print(s) 
                 its = uproot.open(s)["sf/t"]
                 #print it.arrays(VARS)
-                p_dfs = its.pandas.df(self.VARS+['susyXsec','mGo','mLSP','susyNgen','nISRweight'])
-                p_dfs['filename'] = np.array(s.split("/")[-1].replace(".root","").replace("evVarFriend_","").replace("_ext",""))
+                p_dfs = its.pandas.df(self.VARS + [
+                    'susyXsec',
+                    'mGo',
+                    'mLSP',
+                    'susyNgen',
+                    'nISRweight'
+                ])
+                p_dfs['filename'] = \
+                  np.array(s.split("/")[-1] \
+                    .replace(".root","") \
+                    .replace("evVarFriend_","") \
+                    .replace("_ext",""))
+
                 sig_df = pd.concat([p_dfs, dfs], ignore_index=True)
                 dfs = pd.concat([p_dfs, dfs], ignore_index=True)
+
             self.df_all['sig'] =  sig_df.loc[(sig_df['nLep'] == 1) & (sig_df['Lep_pt'] > 25)& (sig_df['Selected'] == 1)& (sig_df['Lep_pt'] > 25)&
                                     (sig_df['nVeto'] == 0)& (sig_df['nJets30Clean'] >= 5)& (sig_df['Jet2_pt'] > 80)&
                                     (sig_df['HT'] > 500)& (sig_df['LT'] > 250)&(sig_df['nBJet'] >= 1)]
+
             # rename the column susXsec to Xsec 
             self.df_all['sig'].rename(columns={'susyXsec':'Xsec'},inplace=True)
             # cleanup not needed DFs
@@ -111,14 +153,40 @@ class PrepData(object):
             del p_dfs 
             del sig_df
             # place the final weight (Xsec * all other SFs / total sum of weights)
-            self.df_all['sig'].loc[:,'Finalweight'] = self.df_all['sig'].Xsec*self.df_all['sig'].btagSF*self.df_all['sig'].puRatio*self.df_all['sig'].lepSF*self.df_all['sig'].nISRttweight*self.df_all['sig'].genWeight/self.df_all['sig'].sumOfWeights
-            # drop unnecessary variables
-            self.df_all['sig'] = self.df_all['sig'].drop(['sumOfWeights','genWeight','nISRttweight','nISRweight','susyNgen','Xsec','btagSF','lepSF','puRatio'],axis=1)
-        # rearrange the the bkg to match with sig df 
-        self.df_all['bkg'] = self.df_all['bkg'].reindex(columns=self.df_all['sig'].columns)
+            self.df_all['sig'].loc[:,'Finalweight'] \
+              = self.df_all['sig'].Xsec \
+              * self.df_all['sig'].btagSF \
+              * self.df_all['sig'].puRatio \
+              * self.df_all['sig'].lepSF \
+              * self.df_all['sig'].nISRttweight \
+              * self.df_all['sig'].genWeight \
+              / self.df_all['sig'].susyNgen
+              # / self.df_all['sig'].sumOfWeights
 
-        # # Save the signals/bkg from .csv
+            # drop unnecessary variables
+            self.df_all['sig'] \
+              = self.df_all['sig'].drop(
+                  [
+                    'sumOfWeights',
+                    'genWeight',
+                    'nISRttweight',
+                    'nISRweight',
+                    'susyNgen',
+                    'Xsec',
+                    'btagSF',
+                    'lepSF',
+                    'puRatio'
+                  ],
+                  axis=1
+            )
+
+        # rearrange the the bkg to match with sig df 
+        self.df_all['bkg'] = \
+          self.df_all['bkg'].reindex(columns=self.df_all['sig'].columns)
+
+        # Save the signals/bkg from .csv
         if not os.path.exists(csv_dir+'/MultiClass_background.csv') : 
             self.df_all['bkg'].to_csv(csv_dir+'/MultiClass_background.csv',index=None)
         if not os.path.exists(csv_dir+'/MultiClass_signal.csv') :
             self.df_all['sig'].to_csv(csv_dir+'/MultiClass_signal.csv',index=None)
+

@@ -31,9 +31,10 @@ from scipy import interp
 from itertools import cycle
 import tensorflow as tf
 
+MONITOR = 'val_loss'
 
 class score(object):
-    def __init__(self,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None):
+    def __init__(self,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None, monitor='val_loss'):
         self.outdir              = outdir                 
         self.testDF              = testDF                 
         self.trainDF             = trainDF                
@@ -44,9 +45,9 @@ class score(object):
         self.do_parametric       = do_parametric          
         self.split_Sign_training = split_Sign_training
         self.class_names         = class_names
+        self.monitor             = monitor
 
-    def _buildDNN(self, multi, loss, learn_rate, nclass, dropout, \
-            extra_layers):
+    def _buildDNN(self, multi, loss, learn_rate, nclass, dropout, extra_layers):
         NDIM = len(self.var_list)
         DNN = Sequential()
 
@@ -85,9 +86,9 @@ class score(object):
     def _fit(self, epochs, batch_size):
         # model checkpoint callback
         # this saves our model architecture + parameters into dense_model.h5
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10)
+        early_stopping = EarlyStopping(monitor=self.monitor, patience=10)
         model_checkpoint = ModelCheckpoint('dense_model.h5',
-            monitor           = 'val_loss', 
+            monitor           = self.monitor, 
             verbose           = 0,
             save_best_only    = True, 
             save_weights_only = False,
@@ -95,16 +96,42 @@ class score(object):
             period            = 1
         )
 
+        # Split on train- and test-data
+        # df = self.trainDF
+        # train_df, test_df = np.split(df, [int(len(df) * 0.75)])
+
+        # print("[train] N signal in train DF:", len(train_df[train_df["isSignal"] == 1]))
+        # print("[train] N background in train DF:", len(train_df[train_df["isSignal"] == 0]))
+
+        # print("[train] N signal in test DF:", len(test_df[test_df["isSignal"] == 1]))
+        # print("[train] N background in test DF:", len(test_df[test_df["isSignal"] == 0]))
+        
+        labels = self.trainDF["isSignal"].values
+        if self.do_multiClass:
+            labels = keras.utils.to_categorical(labels)
+
+        # Use class weights by default.
+        class_weights = self.class_weights
+        sample_weights = None
+        # If class weights not set, then use sample weights.
+        if class_weights is None:
+            sample_weights = self.trainDF["Finalweight"].values
+
         # Train the model.
         return self.model.fit(
             self.trainDF[self.var_list].values, 
-            self.trainDF["isSignal"].values,
+            labels,
             epochs           = epochs,
             batch_size       = batch_size, 
-            sample_weight    = self.trainDF["Finalweight"].values,
-            verbose          = 1, # switch to 1 for more verbosity 
-            callbacks        = [early_stopping, model_checkpoint], 
-            validation_split = 0.25
+            class_weight     = class_weights,
+            sample_weight    = sample_weights,
+            verbose          = 1,
+            callbacks        = [early_stopping, model_checkpoint],
+            validation_split = 0.25,
+            # shuffle          = True
+            # validation_data    = (test_df[self.var_list].values,
+                                  # test_df["isSignal"].values,
+                                  # test_df["Finalweight"].values)
         )
 
     def build(self, loss, multi=False, nclass=4, extra_layers=0, learn_rate=0.0001, dropout=True):
@@ -132,12 +159,12 @@ class score(object):
 
     def score_test(self):
         if not hasattr(self, 'dnn_score_test'):
-            self.dnn_score_test = self.model.predict(self.testDF[self.var_list])
+            self.dnn_score_test = self.model.predict(self.testDF[self.var_list], verbose=1)
         return self.dnn_score_test
 
     def score_train(self):
         if not hasattr(self, 'dnn_score_train'):
-            self.dnn_score_train = self.model.predict(self.trainDF[self.var_list])
+            self.dnn_score_train = self.model.predict(self.trainDF[self.var_list], verbose=1)
         return self.dnn_score_train
 
     def save_model(self,model_toSave,append=''):

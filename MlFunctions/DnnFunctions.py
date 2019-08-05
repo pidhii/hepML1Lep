@@ -119,11 +119,83 @@ def significanceLossInvert(expectedSignal,expectedBkgd):
 
         signalWeight=expectedSignal/K.sum(y_true)
         bkgdWeight=expectedBkgd/K.sum(1-y_true)
+        # signalWeight=1.#expectedSignal/K.sum(y_true)
+        # bkgdWeight=1.#expectedBkgd/K.sum(1-y_true)
 
         s = signalWeight*K.sum(y_pred*y_true)
         b = bkgdWeight*K.sum(y_pred*(1-y_true))
 
         return (s+b)/(s*s+K.epsilon()) # Add the epsilon to avoid dividing by 0
+
+    return sigLossInvert
+
+def multiclass_aux(expectedSignal, expectedBkgd, systematic):
+
+    def losses(y_true,y_pred):
+        y_true_t = tf.transpose(y_true)
+        y_pred_t = tf.transpose(y_pred)
+
+        def get_true(i): return tf.transpose(y_true_t[i,:])
+        def get_pred(i): return tf.transpose(y_pred_t[i,:])
+
+        def crossentropy(i):
+            return keras.losses.categorical_crossentropy(get_true(i), get_pred(i))
+
+        def significance(i):
+            y_true = get_true(i)
+            y_pred = get_pred(i)
+
+            signalWeight = expectedSignal / K.sum(y_true)
+            bkgdWeight = expectedBkgd / K.sum(1-y_true)
+            # signalWeight=1.#expectedSignal/K.sum(y_true)
+            # bkgdWeight=1.#expectedBkgd/K.sum(1-y_true)
+
+            s = signalWeight*K.sum(y_pred*y_true)
+            b = bkgdWeight*K.sum(y_pred*(1-y_true))
+
+            # Add the epsilon to avoid dividing by 0
+            return (s+b)/(s*s+K.epsilon())
+
+        def asimov(i):
+            y_true = get_true(i)
+            y_pred = get_pred(i)
+
+            signalWeight = expectedSignal/K.sum(y_true)
+            bkgdWeight = expectedBkgd/K.sum(1-y_true)
+            # signalWeight = 1.#expectedSignal/K.sum(y_true)
+            # bkgdWeight = 1.#expectedBkgd/K.sum(1-y_true)
+
+            s = signalWeight*K.sum(y_pred*y_true)
+            b = bkgdWeight*K.sum(y_pred*(1-y_true))
+            sigB = systematic*b
+
+            ln1_top = (s + b)*(b + sigB*sigB)
+            ln1_bot = b*b + (s + b)*sigB*sigB
+            ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
+
+            ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
+
+            return 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon()) #Add the epsilon to avoid dividing by 0
+
+        return {
+          'crossentropy': crossentropy,
+          'significance': significance,
+          'asimov'      : asimov
+        }
+
+    return losses
+
+def significanceLossInvert_m(expectedSignal,expectedBkgd):
+    losses = multiclass_aux(expectedSignal, expectedBkgd, None)
+
+    def sigLossInvert(y_true,y_pred):
+        l = losses(y_true, y_pred)
+        crossentropy = l['crossentropy']
+        significance = l['significance']
+        return crossentropy(0) \
+             + crossentropy(1) \
+             + crossentropy(2) \
+             + significance(3)
 
     return sigLossInvert
 
@@ -220,7 +292,7 @@ def asimovSignificanceLoss(expectedSignal,expectedBkgd,systematic):
 
     return asimovSigLoss
 
-def asimovSignificanceLossInvert(expectedSignal,expectedBkgd,systematic):
+def asimovSignificanceLossInvert(expectedSignal, expectedBkgd, systematic, debug=False):
     '''
     Define a loss function that calculates the significance based on fixed
     expected signal and expected background yields for a given batch size.
@@ -229,10 +301,10 @@ def asimovSignificanceLossInvert(expectedSignal,expectedBkgd,systematic):
     '''
 
     def asimovSigLossInvert(y_true,y_pred):
-        #Continuous version:
-
         signalWeight = expectedSignal/K.sum(y_true)
         bkgdWeight = expectedBkgd/K.sum(1-y_true)
+        # signalWeight = 1.#expectedSignal/K.sum(y_true)
+        # bkgdWeight = 1.#expectedBkgd/K.sum(1-y_true)
 
         s = signalWeight*K.sum(y_pred*y_true)
         b = bkgdWeight*K.sum(y_pred*(1-y_true))
@@ -244,56 +316,40 @@ def asimovSignificanceLossInvert(expectedSignal,expectedBkgd,systematic):
 
         ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
 
-        return 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon()) #Add the epsilon to avoid dividing by 0
+        if debug:
+            s = K.print_tensor(s, message='s = ')
+            b = K.print_tensor(b, message='b = ')
+            sigB = K.print_tensor(sigB, message='sigB = ')
+            ln1 = K.print_tensor(ln1, message='ln1 = ')
+            ln2 = K.print_tensor(ln2, message='ln2 = ')
+
+        loss = 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon()) #Add the epsilon to avoid dividing by 0
+        if debug:
+            loss = K.print_tensor(loss, message='loss = ')
+        return loss
+
         # return 1./(2*((s+b)*K.log((s+b)*(b+sigB*sigB)/(b*b+(s+b)*sigB*sigB+K.epsilon())+K.epsilon())-b*b*K.log(1+sigB*sigB*s/(b*(b+sigB*sigB)+K.epsilon()))/(sigB*sigB+K.epsilon()))) #Add the epsilon to avoid dividing by 0
 
     return asimovSigLossInvert
 
-def multiclass(systematic):
-    '''
-    Define a loss function that calculates the significance based on fixed
-    expected signal and expected background yields for a given batch size.
+def asimovSignificanceLossInvert_m(expectedSignal, expectedBkgd, systematic, debug=False):
+    losses = multiclass_aux(expectedSignal, expectedBkgd, systematic)
 
-    (1 / Eq. 3.1)^2 -- ✓
-    '''
+    def asimovSigLossInvert(y_true,y_pred):
+        l = losses(y_true, y_pred)
+        crossentropy = l['crossentropy']
+        asimov = l['asimov']
+        loss_bg = crossentropy(0) \
+                + crossentropy(1) \
+                + crossentropy(2) #\
+                # + crossentropy(3)
+        loss_sig = asimov(3)
+        if debug:
+          loss_bg = K.print_tensor(loss_bg, "loss_bg = ")
+          loss_sig = K.print_tensor(loss_sig, "loss_sig = ")
+        return loss_sig + 1E-08*loss_bg
 
-    def loss(y_true,y_pred):
-        tf.print(y_true, output_stream=sys.stderr)
-        print("--- \x1b[38;5;2;1mshape(y_true)\x1b[0m =", K.int_shape(y_true)[1])
-        return keras.losses.categorical_crossentropy(y_true, y_pred)
-
-		# Asimov significance for signal
-        y_true_asi = tf.map_fn(lambda x: tf.gather(x, 3), y_true)
-        y_pred_asi = tf.map_fn(lambda x: tf.gather(x, 3), y_pred)
-
-        # sep_asi = tf.constant([0, 0, 0, 1], shape=[0, 4])
-        # y_true_asi = sep_asi * y_true
-        # y_pred_asi = sep_asi * y_pred
-
-        s = K.sum(y_pred_asi*y_true_asi)
-        b = K.sum(y_pred_asi*(1-y_true_asi))
-        sigB = systematic*b
-
-        ln1_top = (s + b)*(b + sigB*sigB)
-        ln1_bot = b*b + (s + b)*sigB*sigB
-        ln1 = K.log(ln1_top / (ln1_bot + K.epsilon()) + K.epsilon())
-
-        ln2 = K.log(1. + sigB*sigB*s / (b*(b + sigB*sigB) + K.epsilon()))
-
-        loss_3 = 1./(2*((s + b)*ln1 - b*b*ln2/(sigB*sigB + K.epsilon())) + K.epsilon())
-
-        # Binary cross entropy for background
-        y_true_bg = tf.map_fn(lambda x: tf.gather(x, [0, 1, 2]), y_true)
-        y_pred_bg = tf.map_fn(lambda x: tf.gather(x, [0, 1, 2]), y_pred)
-
-        loss_012 = keras.losses.categorical_crossentropy(y_true_bg, y_pred_bg)
-
-        # return loss_3 + K.sum(loss_012)
-        # return tf.stack([loss_012, loss_3])
-        return loss_3
-		
-
-    return loss
+    return asimovSigLossInvert
 
 def asimovSignificanceFull(expectedSignal,expectedBkgd,systematic):
     '''

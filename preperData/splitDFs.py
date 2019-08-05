@@ -7,10 +7,15 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import class_weight
 import os
+# Mass_points = [[1900,1000]]#,[2200,100],[2200,800],[1900,800],[1900,100],[1500,1000],[1500,1200],[1700,1200],[1600,1100],[1800,1300]]
 Mass_points = [[1900,1000]]#,[2200,100],[2200,800],[1900,800],[1900,100],[1500,1000],[1500,1200],[1700,1200],[1600,1100],[1800,1300]]
 signal_Cla = [[[1600,1100],[1800,1300],[1500,1000],[1500,1200],[1700,1200]],[[1900,100],[2200,100],[2200,800],[1900,800],[1900,1000]]]
 to_drop = ['lheHTIncoming', 'genTau_grandmotherId', 'genTau_motherId', 'genLep_grandmotherId',
                'genLep_motherId', 'DiLep_Flag', 'semiLep_Flag', 'GenMET',  'filename']
+
+
+def set_Mlsp(Mlsp, i=0):
+  Mass_points[i][1] = Mlsp
 
 class splitDFs(object):
     def __init__(self,signalDF, bkgDF,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
@@ -21,6 +26,7 @@ class splitDFs(object):
         self.nSignal_Cla =nSignal_Cla
         self.do_parametric = do_parametric
         self.split_Sign_training = split_Sign_training
+
     # function to get the index of each class of background
     def classidxs(self):
         """
@@ -32,6 +38,7 @@ class splitDFs(object):
         self.WJets_others_index = self.bkgDF[~ self.bkgDF['filename'].str.contains('TTJets')].index
 
         print (self.signalDF.groupby(['mGo','mLSP']).size())
+
 
         ## this is very usful when you need to sample specific class to match with other class (overSample Signal to backgound for example)        
     from sklearn.utils import shuffle
@@ -69,7 +76,7 @@ class splitDFs(object):
         self.list_of_mass_idxs = []
         self.signal_list_names = [] 
         for massP in Mass_points:
-            print ('mass chosen is [mGo,mLSP] == : ', massP)
+            print('mass chosen is [mGo,mLSP] == : ', massP)
             vars()['Sig_index_mGo_'+str(massP[0])+'_mLSP_'+str(massP[1])] = self.signalDF.index[(self.signalDF['mGo'] == massP[0]) & (self.signalDF['mLSP'] == massP[1])]
             self.list_of_mass_idxs.append(vars()['Sig_index_mGo_'+str(massP[0])+'_mLSP_'+str(massP[1])])
             self.signal_list_names.append('Sig_'+str(massP[0])+'_'+str(massP[1]))
@@ -185,7 +192,7 @@ class splitDFs(object):
                 self.df_all[self.signal_list_names[num]] = self.signalDF.loc[idxs ,:]
                 self.df_all[self.signal_list_names[num]].loc[:,'isSignal'] = 1
                 ## for the last training over all the samples (the multiClass trainig)
-                self.df_all['all_sig'] = pd.concat([self.df_all['all_sig'],self.df_all[self.signal_list_names[num]]])
+                self.df_all['all_sig'] = pd.concat([self.df_all['all_sig'], self.df_all[self.signal_list_names[num]]])
                 #del self.df_all[self.signal_list_names[num]]
             # if doing binary classification then overwrite the bkgclass numbers by 0 and signal to 1 
             self.df_all['all_sig'] = self.df_all['all_sig'].reset_index()    
