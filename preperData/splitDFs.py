@@ -3,22 +3,23 @@ import pandas as pd
 # fix random seed for reproducibility
 seed = 7
 np.random.seed(seed)
+import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import class_weight
 import os
+Mass_points = None#[[1900,1000],[2200,100],[2200,800],[1900,800],[1900,100],[1500,1000],[1500,1200],[1700,1200],[1600,1100],[1800,1300]]
 # Mass_points = [[1900,1000]]#,[2200,100],[2200,800],[1900,800],[1900,100],[1500,1000],[1500,1200],[1700,1200],[1600,1100],[1800,1300]]
-Mass_points = [[1900,1000]]#,[2200,100],[2200,800],[1900,800],[1900,100],[1500,1000],[1500,1200],[1700,1200],[1600,1100],[1800,1300]]
 signal_Cla = [[[1600,1100],[1800,1300],[1500,1000],[1500,1200],[1700,1200]],[[1900,100],[2200,100],[2200,800],[1900,800],[1900,1000]]]
 to_drop = ['lheHTIncoming', 'genTau_grandmotherId', 'genTau_motherId', 'genLep_grandmotherId',
                'genLep_motherId', 'DiLep_Flag', 'semiLep_Flag', 'GenMET',  'filename']
 
 
-def set_Mlsp(Mlsp, i=0):
-  Mass_points[i][1] = Mlsp
+def set_mass_point(mGo, mLSP):
+  Mass_points = [[mGo, mLSP]]
 
 class splitDFs(object):
-    def __init__(self,signalDF, bkgDF,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False):
+    def __init__(self,signalDF, bkgDF,do_multiClass=True, nSignal_Cla=1, do_parametric=True, split_Sign_training=False, mass_points=[[1900, 1000]]):
         self.signalDF = signalDF
         self.bkgDF = bkgDF
         #self.do_binary_first = do_binary_first
@@ -26,6 +27,7 @@ class splitDFs(object):
         self.nSignal_Cla =nSignal_Cla
         self.do_parametric = do_parametric
         self.split_Sign_training = split_Sign_training
+        self.mass_points = mass_points
 
     # function to get the index of each class of background
     def classidxs(self):
@@ -40,8 +42,8 @@ class splitDFs(object):
         print (self.signalDF.groupby(['mGo','mLSP']).size())
 
 
-        ## this is very usful when you need to sample specific class to match with other class (overSample Signal to backgound for example)        
-    from sklearn.utils import shuffle
+    # This is very usful when you need to sample specific class
+    # to match with other class (overSample Signal to backgound for example)        
     def _overbalance(self,train_s,train_bkg):
         """
         Return Oversampled dataset
@@ -52,17 +54,18 @@ class splitDFs(object):
         df_class_0 = train_bkg
         df_class_1 = train_s
         df_class_1_over = df_class_1.sample(count_bkg, replace=True)
-        df_class_1_over = shuffle(df_class_1_over)
+        df_class_1_over = sklearn.utils.shuffle(df_class_1_over)
         return df_class_1_over
 
-    ## this is very usful when you need to sample background class to preper it for the parametric training
+    # This is very usful when you need to sample background class to 
+    # preper it for the parametric training.
     def _overbalance_bkg(self,signals_df_list,bkg_df):
         """
         Return Oversampled dataset for parametric training
         """
         new_bkg_train = pd.DataFrame()
         bkg_df = bkg_df.copy()
-        for ns in signals_df_list : 
+        for ns in signals_df_list: 
             bkg_df.loc[:,'mGo'] = np.random.choice(list(ns['mGo']), len(bkg_df))
             bkg_df.loc[:,'mLSP'] = np.random.choice(list(ns['mLSP']), len(bkg_df))
             new_bkg_train = pd.concat([new_bkg_train, bkg_df], ignore_index=True)
@@ -71,14 +74,21 @@ class splitDFs(object):
         
     def sigidxs(self):
         '''
-         Function to find the indexes of each signal mass point from the big signal DF
+         Function to find the indexes of each signal mass point
+         from the big signal DF.
         '''
         self.list_of_mass_idxs = []
         self.signal_list_names = [] 
-        for massP in Mass_points:
+        for massP in self.mass_points:
             print('mass chosen is [mGo,mLSP] == : ', massP)
-            vars()['Sig_index_mGo_'+str(massP[0])+'_mLSP_'+str(massP[1])] = self.signalDF.index[(self.signalDF['mGo'] == massP[0]) & (self.signalDF['mLSP'] == massP[1])]
-            self.list_of_mass_idxs.append(vars()['Sig_index_mGo_'+str(massP[0])+'_mLSP_'+str(massP[1])])
+            vars()['Sig_index_mGo_'+str(massP[0])+'_mLSP_'+str(massP[1])] = \
+                self.signalDF.index[ \
+                    (self.signalDF['mGo'] == massP[0]) & \
+                    (self.signalDF['mLSP'] == massP[1]) \
+                ]
+            self.list_of_mass_idxs.append(
+                vars()['Sig_index_mGo_'+str(massP[0])+'_mLSP_'+str(massP[1])]
+            )
             self.signal_list_names.append('Sig_'+str(massP[0])+'_'+str(massP[1]))
 
     def prepare(self):
@@ -103,13 +113,14 @@ class splitDFs(object):
                             self.signalDF.loc[idxs,'isSignal'] = 4
             self.df_all['all_sig'] = self.signalDF.copy()
             self.df_all['all_sig'] = self.df_all['all_sig'].dropna()
-            if self.do_parametric : 
+            if self.do_parametric: 
                 signal_list_dfs = [] 
                 for name in  self.signal_list_names : 
                     signal_list_dfs.append(self.df_all[name])
                     #print signal_list_dfs
                 self.df_all['all_bkg'] = self._overbalance_bkg(signal_list_dfs,self.bkgDF)
-            else : self.df_all['all_bkg'] = self.bkgDF.copy()
+            else:
+                self.df_all['all_bkg'] = self.bkgDF.copy()
             ## free up the memeory from all other dfs 
             bkgdf =  self.df_all['all_bkg'].copy()
             sigdf =  self.df_all['all_sig'].copy()
@@ -184,28 +195,40 @@ class splitDFs(object):
                     #print signal_list_dfs
                 self.df_all['all_bkg_1'] = self._overbalance_bkg(signal_list_dfs_1,self.bkgDF)
                 self.df_all['all_bkg_2'] = self._overbalance_bkg(signal_list_dfs_2,self.bkgDF)
-            else : self.df_all['all_bkg'] = self.bkgDF.copy()
+            else:
+                self.df_all['all_bkg'] = self.bkgDF.copy()
 
-        elif not self.do_multiClass : 
+        elif not self.do_multiClass: 
             #self.df_all['all_bkg'] = pd.DataFrame()
-            for num ,idxs in enumerate(self.list_of_mass_idxs) : 
-                self.df_all[self.signal_list_names[num]] = self.signalDF.loc[idxs ,:]
+            for num ,idxs in enumerate(self.list_of_mass_idxs): 
+                self.df_all[self.signal_list_names[num]] = \
+                    self.signalDF.loc[idxs ,:]
                 self.df_all[self.signal_list_names[num]].loc[:,'isSignal'] = 1
-                ## for the last training over all the samples (the multiClass trainig)
-                self.df_all['all_sig'] = pd.concat([self.df_all['all_sig'], self.df_all[self.signal_list_names[num]]])
+                # for the last training over all the samples
+                # (the multiClass trainig)
+                self.df_all['all_sig'] = \
+                    pd.concat([
+                        self.df_all['all_sig'],
+                        self.df_all[self.signal_list_names[num]]
+                    ])
                 #del self.df_all[self.signal_list_names[num]]
-            # if doing binary classification then overwrite the bkgclass numbers by 0 and signal to 1 
+
+            # if doing binary classification then overwrite the bkgclass
+            # numbers by 0 and signal to 1 
             self.df_all['all_sig'] = self.df_all['all_sig'].reset_index()    
-            self.bkgDF.loc[self.SemiLep_TT_index,'isSignal'] = 0 #pd.Series(np.zeros(self.bkgDF.shape[0]), index=self.bkgDF.index)
+            #pd.Series(np.zeros(self.bkgDF.shape[0]), index=self.bkgDF.index)
+            self.bkgDF.loc[self.SemiLep_TT_index,'isSignal'] = 0
             self.bkgDF.loc[self.DiLep_TT_index,'isSignal'] = 0
             self.bkgDF.loc[self.WJets_others_index,'isSignal'] = 0
-            if self.do_parametric : 
+
+            if self.do_parametric: 
                 signal_list_dfs = [] 
-                for name in  self.signal_list_names : 
+                for name in self.signal_list_names: 
                     signal_list_dfs.append(self.df_all[name])
-                #print signal_list_dfs
-                self.df_all['all_bkg'] = self._overbalance_bkg(signal_list_dfs,self.bkgDF)
-            else : self.df_all['all_bkg'] = self.bkgDF.copy()
+                self.df_all['all_bkg'] = \
+                    self._overbalance_bkg(signal_list_dfs, self.bkgDF)
+            else:
+                self.df_all['all_bkg'] = self.bkgDF.copy()
             del self.bkgDF
             ## free up the memeory from all other dfs 
             bkgdf =  self.df_all['all_bkg'].copy()
@@ -217,21 +240,60 @@ class splitDFs(object):
             del bkgdf
             del sigdf
 
-    def split(self,sigdfnew,bkgdfnew,train_size=0.6, test_size=0.4, shuffle=True, random_state=0) :
+    def split(self, sigdfnew, bkgdfnew,
+              *,
+              train_size = 0.6,
+              test_size = 0.4,
+              shuffle = True,
+              random_state = 0,
+              overbalance = False):
         "Function to split the DFs into testing and training supsets "
-        print ('now splitting the samples with the options : ','train_size = ', train_size, 'test_size = ',test_size, 'shuffle = ',shuffle, 'random_state = ',random_state)
+        print(
+            'now splitting the samples with the options:',
+            'train_size =', train_size,
+            'test_size =', test_size,
+            'shuffle =', shuffle,
+            'random_state =', random_state
+        )
         # write df1 content in file.csv
         
         _df_all = pd.concat([sigdfnew,bkgdfnew])
         del sigdfnew, bkgdfnew
         _df_all_tr = _df_all.drop(to_drop,axis=1)
-        self.train_DF, self.test_DF = train_test_split(_df_all_tr, train_size=train_size, test_size=test_size, shuffle=shuffle, random_state=random_state)        
+        self.train_DF, self.test_DF = train_test_split(
+            _df_all_tr,
+            train_size = train_size,
+            test_size = test_size,
+            shuffle = shuffle,
+            random_state = random_state
+        )
+
+        # Reset indexes (we don't care of them)
         self.train_DF = self.train_DF.reset_index(drop=True)
         self.test_DF  = self.test_DF.reset_index(drop=True)
 
-        self.class_weights = class_weight.compute_class_weight('balanced',
-                                                np.unique(self.train_DF['isSignal']),
-                                                self.train_DF['isSignal'])
+        # Oversample signal. Use to increase number of signal events in case of
+        # training data has too few of them.
+        if overbalance:
+            # separate signal from background
+            is_signal = self.train_DF['isSignal'] == 1
+            sig = self.train_DF[is_signal]
+            bkg = self.train_DF[~is_signal]
+
+            # oversample signal
+            sig = self._overbalance(sig, bkg)
+            print("--- overbalanced signal: {} sig vs {} bkg"
+                .format(len(sig.index), len(bkg.index)))
+
+            # merge signal and background back to a single training dataframe
+            self.train_DF = sklearn.utils.shuffle(pd.concat([sig, bkg]))
+
+        self.class_weights = class_weight.compute_class_weight(
+            'balanced',
+            np.unique(self.train_DF['isSignal']),
+            self.train_DF['isSignal']
+        )
+
         # write the testDF and trainDF in case you want to save time (not too much)
         
     

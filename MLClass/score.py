@@ -10,10 +10,9 @@ np.random.seed(seed)
 import concurrent.futures
 from sklearn.metrics import log_loss, auc, roc_curve, accuracy_score, roc_auc_score
 from keras.models import model_from_json
-from xgboost import XGBClassifier
 # baseline keras model
 from keras.models import Sequential, Model
-from keras.optimizers import SGD,Adam,Nadam
+from keras.optimizers import SGD,Adam, Nadam, Adadelta
 from keras.layers import Input, Activation, Dense, Convolution2D, MaxPooling2D,Dropout, BatchNormalization, Flatten,concatenate
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint ,EarlyStopping , ReduceLROnPlateau
@@ -30,11 +29,12 @@ from sklearn.preprocessing import label_binarize
 from scipy import interp
 from itertools import cycle
 import tensorflow as tf
+import loss
 
-MONITOR = 'val_loss'
+MONITOR = 'loss'
 
 class score(object):
-    def __init__(self,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None, monitor='val_loss'):
+    def __init__(self,outdir,testDF,trainDF,class_weights,var_list,do_multiClass = True,nSignal_Cla = 1,do_parametric = True,split_Sign_training = False,class_names=None, monitor='val_loss', weights='class_weights'):
         self.outdir              = outdir                 
         self.testDF              = testDF                 
         self.trainDF             = trainDF                
@@ -46,6 +46,7 @@ class score(object):
         self.split_Sign_training = split_Sign_training
         self.class_names         = class_names
         self.monitor             = monitor
+        self.weights             = weights
 
     def _buildDNN(self, multi, loss, learn_rate, nclass, dropout, extra_layers):
         NDIM = len(self.var_list)
@@ -96,30 +97,45 @@ class score(object):
             period            = 1
         )
 
-        # Split on train- and test-data
-        # df = self.trainDF
-        # train_df, test_df = np.split(df, [int(len(df) * 0.75)])
-
-        # print("[train] N signal in train DF:", len(train_df[train_df["isSignal"] == 1]))
-        # print("[train] N background in train DF:", len(train_df[train_df["isSignal"] == 0]))
-
-        # print("[train] N signal in test DF:", len(test_df[test_df["isSignal"] == 1]))
-        # print("[train] N background in test DF:", len(test_df[test_df["isSignal"] == 0]))
-        
+        #
+        # Set up labels (+ metadata).
+        #
         labels = self.trainDF["isSignal"].values
         if self.do_multiClass:
+            # Convert [(0..3) ...] to [[(0..1) x 4] ...].
             labels = keras.utils.to_categorical(labels)
 
-        # Use class weights by default.
-        class_weights = self.class_weights
+        #
+        # Set up weights.
+        #
+        class_weights = None
         sample_weights = None
-        # If class weights not set, then use sample weights.
-        if class_weights is None:
+        if self.weights == 'class_weights':
+            class_weights = self.class_weights
+        elif self.weights == 'sample_weights':
             sample_weights = self.trainDF["Finalweight"].values
+        elif self.weights == 'both':
+            ws = self.trainDF["Finalweight"].values
+            seq = [self.class_weights[int(x)] for x in self.trainDF["isSignal"].values]
+            cws = np.array(seq, dtype='d')
+            if self.do_multiClass:
+                labels = np.concatenate((labels, ws[:, None]), axis=1)
+                labels = np.concatenate((labels, cws[:, None]), axis=1)
+            else:
+                labels = np.column_stack((labels, ws, cws))
+                # labels = np.array([[x] for x in zip(labels, ws, cws)])
+        else:
+            assert self.weights is None
+
+        data = self.trainDF[self.var_list].values
+
+        print("--- data shape:", data.shape)
+        print("--- labels.shape:", labels.shape)
+        # quit(42)
 
         # Train the model.
         return self.model.fit(
-            self.trainDF[self.var_list].values, 
+            data,
             labels,
             epochs           = epochs,
             batch_size       = batch_size, 
@@ -194,7 +210,8 @@ class score(object):
         self.model = model_from_json(loaded_model_json)
         # load weights into new model
         self.model.load_weights(pathToModel+'.h5')
-        self.model.compile(loss=loss,metrics=['accuracy'], optimizer=Adam(lr=learn_rate))
+        if loss:
+            self.model.compile(loss=loss, metrics=['accuracy'], optimizer=Adadelta(lr=learn_rate))
 
         self.model.summary()
 
